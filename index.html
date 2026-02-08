@@ -1,4 +1,24 @@
-﻿<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+﻿<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>ESP32 家電控制</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<style>
+body { font-family: Arial; background: #f5f5f5; text-align:center; }
+h2 { margin: 20px 0; }
+.grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; max-width:360px; margin:auto; }
+button { height:70px; font-size:18px; border-radius:8px; border:none; background:#aaa; color:white; }
+button.on { background:#2ecc71; }
+#status { margin:15px; font-size:16px; }
+</style>
+</head>
+<body>
+<h2>ESP32 家電控制</h2>
+<div id="status">MQTT 連線中...</div>
+<div class="grid" id="buttons"></div>
+
 <script>
 window.addEventListener('DOMContentLoaded', () => {
   const deviceState = {};
@@ -7,54 +27,44 @@ window.addEventListener('DOMContentLoaded', () => {
   const BROKER = "wss://yb01715d.ala.asia-southeast1.emqxsl.com:8084/mqtt";
   const USERNAME = "jyhon";
   const PASSWORD = "jyhon";
-  const TOPIC_CMD   = "jam1liau2/item1";
+  const TOPIC_CMD = "jam1liau2/item1";
   const TOPIC_REPLY = "jam1liau2/reply";
 
-  for (let i = 1; i <= 9; i++) {
-    deviceState[i] = false;
-    const btn = document.createElement("button");
-    btn.id = "btn" + i;
-    btn.innerText = "設備 " + i + "（關）";
-    btn.onclick = () => toggleDevice(i);
+  for(let i=1;i<=9;i++){
+    deviceState[i]=false;
+    const btn=document.createElement("button");
+    btn.id="btn"+i;
+    btn.innerText="設備 "+i+"（關）";
+    btn.onclick=()=>{ toggleDevice(i); };
     buttonsDiv.appendChild(btn);
   }
 
-  const client = mqtt.connect(BROKER, {
-    username: USERNAME,
-    password: PASSWORD,
-    reconnectPeriod: 3000
-  });
+  const client = mqtt.connect(BROKER,{ username:USERNAME, password:PASSWORD, reconnectPeriod:3000 });
 
-  client.on("connect", () => {
-    document.getElementById("status").innerText = "MQTT 已連線";
-    client.subscribe(TOPIC_REPLY);
-  });
+  client.on("connect",()=>{ document.getElementById("status").innerText="MQTT 已連線"; client.subscribe(TOPIC_REPLY); });
 
-  client.on("message", (topic, message) => {
-    if (topic !== TOPIC_REPLY) return;
-    const text = message.toString();
-    const match = text.match(/#(\d+)\s+power\s+(on|off)/i);
-    if (!match) return;
-    const id = parseInt(match[1]);
-    const state = match[2].toLowerCase() === "on";
-    deviceState[id] = state;
+  client.on("message",(topic,message)=>{
+    if(topic!==TOPIC_REPLY) return;
+    const text=message.toString();
+    const match=text.match(/#(\d+)\s+power\s+(on|off)/i);
+    if(!match) return;
+    const id=parseInt(match[1]);
+    const state=match[2].toLowerCase()==="on";
+    deviceState[id]=state;
     updateButton(id);
   });
 
-  function toggleDevice(id) {
-    const payload = id + (deviceState[id] ? "0" : "1");
-    client.publish(TOPIC_CMD, payload);
+  function toggleDevice(id){
+    const payload=id+(deviceState[id]?"0":"1");
+    client.publish(TOPIC_CMD,payload);
   }
 
-  function updateButton(id) {
-    const btn = document.getElementById("btn" + id);
-    if (deviceState[id]) {
-      btn.classList.add("on");
-      btn.innerText = "設備 " + id + "（開）";
-    } else {
-      btn.classList.remove("on");
-      btn.innerText = "設備 " + id + "（關）";
-    }
+  function updateButton(id){
+    const btn=document.getElementById("btn"+id);
+    if(deviceState[id]) { btn.classList.add("on"); btn.innerText="設備 "+id+"（開）"; }
+    else { btn.classList.remove("on"); btn.innerText="設備 "+id+"（關）"; }
   }
 });
 </script>
+</body>
+</html>
