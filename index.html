@@ -115,17 +115,21 @@ window.addEventListener('DOMContentLoaded', () => {
     function handleVoiceCommand(command){
       const openWords = ["開","開啟","打開"];
       const closeWords = ["關","關閉"];
+
       deviceNames.forEach((name,i)=>{
         const id=i+1;
-        // 判斷開
-        if(openWords.some(w=>command.includes(name + w))) toggleDeviceState(id,true);
-        // 判斷關
-        if(closeWords.some(w=>command.includes(name + w))) toggleDeviceState(id,false);
+        // 判斷是否同時包含設備名稱和動詞（前後皆可）
+        if(openWords.some(w => command.includes(name + w) || command.includes(w + name))){
+          toggleDeviceState(id,true);
+        }
+        if(closeWords.some(w => command.includes(name + w) || command.includes(w + name))){
+          toggleDeviceState(id,false);
+        }
       });
     }
 
     function toggleDeviceState(id,state){
-      if(deviceState[id]===state) return; // 已經是目標狀態就不切換
+      if(deviceState[id]===state) return; // 已經是目標狀態
       const payload=id + (state?"1":"0");
       client.publish(TOPIC_CMD,payload);
       deviceState[id]=state;
