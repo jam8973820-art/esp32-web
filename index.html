@@ -64,19 +64,83 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // ===== 自訂按鈕名稱 =====
   const deviceNames = [
-    "房間電燈",
-    "戶外電燈",
-    "客廳電燈",
-    "客廳風扇",
-    "設備5",
-    "設備6",
-    "設備7",
-    "設備8",
-    "設備9"
+    "客廳燈",
+    "臥室燈",
+    "廚房燈",
+    "冷氣",
+    "風扇",
+    "電視",
+    "電腦",
+    "窗簾",
+    "加濕器"
   ];
 
   const deviceState = {};  // true=開, false=關
   const buttonsDiv = document.getElementById("buttons");
 
   // 建立按鈕
-  deviceNames.forEach((name, i
+  deviceNames.forEach((name, i) => {
+    const id = i + 1;
+    deviceState[id] = false;
+
+    const btn = document.createElement("button");
+    btn.id = "btn" + id;
+    btn.innerText = `${name}（關）`;
+    btn.onclick = () => toggleDevice(id);
+    buttonsDiv.appendChild(btn);
+  });
+
+  // ===== MQTT 連線 =====
+  const client = mqtt.connect(BROKER, {
+    username: USERNAME,
+    password: PASSWORD,
+    reconnectPeriod: 3000
+  });
+
+  client.on("connect", () => {
+    document.getElementById("status").innerText = "MQTT 已連線";
+    client.subscribe(TOPIC_REPLY);
+
+    // 啟動後請求 ESP32 回報狀態
+    client.publish(TOPIC_CMD, "status");
+  });
+
+  client.on("message", (topic, message) => {
+    if (topic !== TOPIC_REPLY) return;
+    const text = message.toString(); // 範例: "#1 power on"
+    const match = text.match(/#(\d+)\s+power\s+(on|off)/i);
+    if (!match) return;
+
+    const id = parseInt(match[1]);
+    const state = match[2].toLowerCase() === "on";
+    deviceState[id] = state;
+    updateButton(id);
+  });
+
+  // 切換設備
+  function toggleDevice(id) {
+    const payload = id + (deviceState[id] ? "0" : "1");
+    client.publish(TOPIC_CMD, payload);
+
+    // 立即切換顯示
+    deviceState[id] = !deviceState[id];
+    updateButton(id);
+  }
+
+  // 更新按鈕顏色
+  function updateButton(id) {
+    const btn = document.getElementById("btn" + id);
+    const name = deviceNames[id - 1];
+    if (deviceState[id]) {
+      btn.classList.add("on");
+      btn.innerText = `${name}（開）`;
+    } else {
+      btn.classList.remove("on");
+      btn.innerText = `${name}（關）`;
+    }
+  }
+});
+</script>
+
+</body>
+</html>
