@@ -2,16 +2,11 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>ESP32-S3 家電控制</title>
+<title>ESP32-S3 家電控制 + 語音</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
-<!-- Favicon / 桌面圖示 -->
 <link rel="icon" href="icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icon-180.png">
-
-<!-- MQTT Library -->
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-
 <style>
 body { font-family: Arial, sans-serif; background:#f5f5f5; text-align:center; }
 h2 { margin:20px 0; }
@@ -20,109 +15,128 @@ button { height:70px; font-size:18px; border-radius:8px; border:none; background
 button.on { background:#2ecc71; }
 button:active { transform: scale(0.97); }
 #status { margin:15px; font-size:16px; }
+#voiceBtn { margin:15px; padding:10px 20px; font-size:16px; background:#3498db; color:white; border:none; border-radius:8px; cursor:pointer; }
 </style>
 </head>
 <body>
 
-<h2>ESP32-S3 家電控制</h2>
+<h2>ESP32-S3 家電控制 + 語音</h2>
 <div id="status">MQTT 連線中...</div>
 <div class="grid" id="buttons"></div>
+<button id="voiceBtn">🎤 語音控制</button>
 
 <script>
 window.addEventListener('DOMContentLoaded', () => {
-  // ======= MQTT 設定 =======
   const BROKER = "wss://yb01715d.ala.asia-southeast1.emqxsl.com:8084/mqtt";
   const USERNAME = "jyhon";
   const PASSWORD = "jyhon";
   const TOPIC_CMD   = "jam1liau2/item1";
   const TOPIC_REPLY = "jam1liau2/reply";
-  // =======================
 
-  // ===== 自訂按鈕名稱 =====
   const deviceNames = [
-    "房間電燈",
-    "戶外電燈",
-    "客廳電燈",
-    "客廳風扇",
-    "設備5",
-    "設備6",
-    "設備7",
-    "設備8",
-    "設備9"
+    "房間電燈","戶外電燈","客廳電燈","客廳風扇","設備5","設備6","設備7","設備8","設備9"
   ];
 
-  const deviceState = {};  // true=開, false=關
+  const deviceState = {};
   const buttonsDiv = document.getElementById("buttons");
 
   // 建立按鈕
-  deviceNames.forEach((name, i) => {
-    const id = i + 1;
-    deviceState[id] = false;
-
-    const btn = document.createElement("button");
-    btn.id = "btn" + id;
-    btn.innerText = `${name}（關）`;
-    btn.onclick = () => toggleDevice(id);
+  deviceNames.forEach((name,i)=>{
+    const id=i+1;
+    deviceState[id]=false;
+    const btn=document.createElement("button");
+    btn.id="btn"+id;
+    btn.innerText=`${name}（關）`;
+    btn.onclick=()=>toggleDevice(id);
     buttonsDiv.appendChild(btn);
   });
 
-  // ===== 產生唯一 Client ID =====
-  function generateClientId() {
-    // 用 "web_" + timestamp + 隨機數字
-    return "web_" + Date.now() + "_" + Math.floor(Math.random()*1000);
-  }
-  const CLIENT_ID = generateClientId();
-
-  // ===== MQTT 連線 =====
-  const client = mqtt.connect(BROKER, {
-    username: USERNAME,
-    password: PASSWORD,
-    clientId: CLIENT_ID,
-    reconnectPeriod: 3000
+  // MQTT 連線，隨機 clientId
+  const client = mqtt.connect(BROKER,{
+    username:USERNAME,
+    password:PASSWORD,
+    reconnectPeriod:3000,
+    clientId:"web_"+Math.random().toString(16).substr(2,8)
   });
 
-  client.on("connect", () => {
-    document.getElementById("status").innerText = "MQTT 已連線 (ID: "+CLIENT_ID+")";
+  client.on("connect",()=>{
+    document.getElementById("status").innerText="MQTT 已連線";
     client.subscribe(TOPIC_REPLY);
-
-    // 啟動後請求 ESP32 回報狀態
-    client.publish(TOPIC_CMD, "status");
+    client.publish(TOPIC_CMD,"status");
   });
 
-  client.on("message", (topic, message) => {
-    if (topic !== TOPIC_REPLY) return;
-    const text = message.toString(); // 範例: "#1 power on"
-    const match = text.match(/#(\d+)\s+power\s+(on|off)/i);
-    if (!match) return;
-
-    const id = parseInt(match[1]);
-    const state = match[2].toLowerCase() === "on";
-    deviceState[id] = state;
+  client.on("message",(topic,message)=>{
+    if(topic!==TOPIC_REPLY) return;
+    const text=message.toString();
+    const match=text.match(/#(\d+)\s+power\s+(on|off)/i);
+    if(!match) return;
+    const id=parseInt(match[1]);
+    const state=match[2].toLowerCase()==="on";
+    deviceState[id]=state;
     updateButton(id);
   });
 
-  // 切換設備
-  function toggleDevice(id) {
-    const payload = id + (deviceState[id] ? "0" : "1");
-    client.publish(TOPIC_CMD, payload);
-
-    // 立即切換顯示
-    deviceState[id] = !deviceState[id];
+  function toggleDevice(id){
+    const payload=id + (deviceState[id]?"0":"1");
+    client.publish(TOPIC_CMD,payload);
+    deviceState[id]=!deviceState[id];
     updateButton(id);
   }
 
-  // 更新按鈕顏色
-  function updateButton(id) {
-    const btn = document.getElementById("btn" + id);
-    const name = deviceNames[id - 1];
-    if (deviceState[id]) {
+  function updateButton(id){
+    const btn=document.getElementById("btn"+id);
+    const name=deviceNames[id-1];
+    if(deviceState[id]){
       btn.classList.add("on");
-      btn.innerText = `${name}（開）`;
-    } else {
+      btn.innerText=`${name}（開）`;
+    }else{
       btn.classList.remove("on");
-      btn.innerText = `${name}（關）`;
+      btn.innerText=`${name}（關）`;
     }
   }
+
+  // ===== 語音控制 =====
+  const voiceBtn = document.getElementById("voiceBtn");
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if(SpeechRecognition){
+    const recognition = new SpeechRecognition();
+    recognition.lang="zh-TW";
+    recognition.interimResults=false;
+
+    voiceBtn.onclick = ()=>recognition.start();
+
+    recognition.onresult = (event)=>{
+      const command = event.results[0][0].transcript;
+      document.getElementById("status").innerText = "語音指令: " + command;
+      handleVoiceCommand(command);
+    }
+
+    function handleVoiceCommand(command){
+      const openWords = ["開","開啟","打開"];
+      const closeWords = ["關","關閉"];
+      deviceNames.forEach((name,i)=>{
+        const id=i+1;
+        // 判斷開
+        if(openWords.some(w=>command.includes(name + w))) toggleDeviceState(id,true);
+        // 判斷關
+        if(closeWords.some(w=>command.includes(name + w))) toggleDeviceState(id,false);
+      });
+    }
+
+    function toggleDeviceState(id,state){
+      if(deviceState[id]===state) return; // 已經是目標狀態就不切換
+      const payload=id + (state?"1":"0");
+      client.publish(TOPIC_CMD,payload);
+      deviceState[id]=state;
+      updateButton(id);
+    }
+
+  }else{
+    voiceBtn.disabled=true;
+    voiceBtn.innerText="語音功能不支援";
+  }
+
 });
 </script>
 
