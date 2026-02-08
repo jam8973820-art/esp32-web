@@ -9,7 +9,7 @@
 
 <style>
 body {
-  font-family: Arial, sans-serif;
+  font-family: Arial;
   background: #f5f5f5;
   text-align: center;
 }
@@ -30,7 +30,93 @@ button {
   border: none;
   background: #aaa;
   color: white;
-  cursor: pointer;
 }
 button.on {
-  background: #2ec
+  background: #2ecc71;
+}
+#status {
+  margin: 15px;
+  font-size: 16px;
+}
+</style>
+</head>
+
+<body>
+
+<h2>ESP32 家電控制</h2>
+<div id="status">MQTT 連線中...</div>
+
+<div class="grid" id="buttons"></div>
+
+<script>
+/* ========= MQTT 設定 ========= */
+const BROKER = "wss://yb01715d.ala.asia-southeast1.emqxsl.com:8084/mqtt";
+const USERNAME = "jyhon";
+const PASSWORD = "jyhon";
+
+const TOPIC_CMD   = "jam1liau2/item1";
+const TOPIC_REPLY = "jam1liau2/reply";
+/* ============================ */
+
+const deviceState = {}; // 1~9 : true / false
+const buttonsDiv = document.getElementById("buttons");
+
+/* 建立 9 個按鈕 */
+for (let i = 1; i <= 9; i++) {
+  deviceState[i] = false;
+
+  const btn = document.createElement("button");
+  btn.id = "btn" + i;
+  btn.innerText = "設備 " + i;
+
+  btn.onclick = () => toggleDevice(i);
+  buttonsDiv.appendChild(btn);
+}
+
+/* MQTT 連線 */
+const client = mqtt.connect(BROKER, {
+  username: USERNAME,
+  password: PASSWORD,
+  reconnectPeriod: 3000
+});
+
+client.on("connect", () => {
+  document.getElementById("status").innerText = "MQTT 已連線";
+  client.subscribe(TOPIC_REPLY);
+});
+
+client.on("message", (topic, message) => {
+  if (topic !== TOPIC_REPLY) return;
+
+  const text = message.toString(); // #1 power on
+  const match = text.match(/#(\d+)\s+power\s+(on|off)/i);
+  if (!match) return;
+
+  const id = parseInt(match[1]);
+  const state = match[2] === "on";
+
+  deviceState[id] = state;
+  updateButton(id);
+});
+
+/* 切換設備 */
+function toggleDevice(id) {
+  const payload = id + (deviceState[id] ? "0" : "1");
+  client.publish(TOPIC_CMD, payload);
+}
+
+/* 更新按鈕顏色 */
+function updateButton(id) {
+  const btn = document.getElementById("btn" + id);
+  if (deviceState[id]) {
+    btn.classList.add("on");
+    btn.innerText = "設備 " + id + "（開）";
+  } else {
+    btn.classList.remove("on");
+    btn.innerText = "設備 " + id + "（關）";
+  }
+}
+</script>
+
+</body>
+</html>
