@@ -13,37 +13,13 @@
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
 <style>
-body {
-  font-family: Arial, sans-serif;
-  background: #f5f5f5;
-  text-align: center;
-}
-h2 {
-  margin: 20px 0;
-}
-.grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  max-width: 360px;
-  margin: auto;
-}
-button {
-  height: 70px;
-  font-size: 18px;
-  border-radius: 8px;
-  border: none;
-  background: #aaa;
-  color: white;
-  cursor: pointer;
-  transition: 0.2s;
-}
-button.on { background: #2ecc71; }
+body { font-family: Arial, sans-serif; background:#f5f5f5; text-align:center; }
+h2 { margin:20px 0; }
+.grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; max-width:360px; margin:auto; }
+button { height:70px; font-size:18px; border-radius:8px; border:none; background:#aaa; color:white; cursor:pointer; transition:0.2s; }
+button.on { background:#2ecc71; }
 button:active { transform: scale(0.97); }
-#status {
-  margin: 15px;
-  font-size: 16px;
-}
+#status { margin:15px; font-size:16px; }
 </style>
 </head>
 <body>
@@ -90,15 +66,23 @@ window.addEventListener('DOMContentLoaded', () => {
     buttonsDiv.appendChild(btn);
   });
 
+  // ===== 產生唯一 Client ID =====
+  function generateClientId() {
+    // 用 "web_" + timestamp + 隨機數字
+    return "web_" + Date.now() + "_" + Math.floor(Math.random()*1000);
+  }
+  const CLIENT_ID = generateClientId();
+
   // ===== MQTT 連線 =====
   const client = mqtt.connect(BROKER, {
     username: USERNAME,
     password: PASSWORD,
+    clientId: CLIENT_ID,
     reconnectPeriod: 3000
   });
 
   client.on("connect", () => {
-    document.getElementById("status").innerText = "MQTT 已連線";
+    document.getElementById("status").innerText = "MQTT 已連線 (ID: "+CLIENT_ID+")";
     client.subscribe(TOPIC_REPLY);
 
     // 啟動後請求 ESP32 回報狀態
