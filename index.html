@@ -4,184 +4,211 @@
 <meta charset="UTF-8">
 <title>ESP32-S3 家電控制</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
-<!-- App / 桌面圖示 -->
-<link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-180.png">
-
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
 <style>
 body {
-  font-family: Arial, sans-serif;
-  background: #f5f5f5;
-  text-align: center;
+  font-family: Arial;
+  background:#f5f5f5;
+  text-align:center;
+  margin:0;
+  padding-bottom:70px; /* 預留底部語音區 */
 }
-h2 { margin: 15px 0; }
+
+h2 { margin:16px 0; }
+
+#status { margin-bottom:10px; font-size:16px; }
+
 .grid {
-  display: grid;
+  display:grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  max-width: 360px;
-  margin: auto;
+  gap:12px;
+  max-width:360px;
+  margin:auto;
 }
+
 button {
-  height: 70px;
-  font-size: 16px;
-  border-radius: 10px;
-  border: none;
-  background: #999;
-  color: white;
-  cursor: pointer;
+  height:70px;
+  font-size:18px;
+  border-radius:8px;
+  border:none;
+  background:#aaa;
+  color:white;
 }
-button.on { background: #2ecc71; }
-#status { margin: 10px; font-size: 15px; }
+
+button.on { background:#2ecc71; }
+
+#micBtn {
+  margin:15px;
+  padding:10px 18px;
+  font-size:16px;
+  border-radius:20px;
+  background:#4285f4;
+  color:white;
+  border:none;
+}
+
+/* ===== 底部語音顯示區（不跳動） ===== */
+#voiceArea {
+  position:fixed;
+  bottom:0;
+  left:0;
+  right:0;
+  background:#fff;
+  border-top:1px solid #ddd;
+  padding:10px;
+}
+
 #voiceText {
-  margin: 10px;
-  font-size: 16px;
-  color: #333;
-}
-#voiceBtn {
-  margin: 10px;
-  padding: 10px 20px;
-  font-size: 18px;
+  min-height:24px;   /* 🔑 防止畫面跳動 */
+  font-size:16px;
+  color:#333;
 }
 </style>
 </head>
 
 <body>
 
-<h2>ESP32 家電控制</h2>
+<h2>ESP32-S3 家電控制</h2>
 <div id="status">MQTT 連線中...</div>
-
-<button id="voiceBtn">🎤 語音控制</button>
-<div id="voiceText">請說指令…</div>
 
 <div class="grid" id="buttons"></div>
 
+<button id="micBtn">🎤 語音控制</button>
+
+<!-- 底部語音顯示 -->
+<div id="voiceArea">
+  <div id="voiceText">請說指令…</div>
+</div>
+
 <script>
-window.addEventListener("DOMContentLoaded", () => {
+/* ========= 使用者可自行設定 ========= */
+const DEVICE_NAMES = [
+  "房間電燈",
+  "客廳電燈",
+  "廚房電燈",
+  "陽台電燈",
+  "走廊電燈",
+  "書房電燈",
+  "電風扇",
+  "冷氣",
+  "插座"
+];
 
-  /* ========= MQTT 設定 ========= */
-  const BROKER = "wss://yb01715d.ala.asia-southeast1.emqxsl.com:8084/mqtt";
-  const USERNAME = "jyhon";
-  const PASSWORD = "jyhon";
-  const TOPIC_CMD   = "jam1liau2/item1";
-  const TOPIC_REPLY = "jam1liau2/reply";
+/* ========= MQTT 設定 ========= */
+const BROKER = "wss://yb01715d.ala.asia-southeast1.emqxsl.com:8084/mqtt";
+const USERNAME = "jyhon";
+const PASSWORD = "jyhon";
+const TOPIC_CMD   = "jam1liau2/item1";
+const TOPIC_REPLY = "jam1liau2/reply";
+const CLIENT_ID = "web_" + Math.random().toString(16).substr(2, 8);
+/* ============================== */
 
-  // ✅ 每次載入都產生不同 ClientID
-  const CLIENT_ID = "web_" + Math.random().toString(16).substr(2, 8);
-  /* ============================ */
+const deviceState = {};
+const buttonsDiv = document.getElementById("buttons");
 
-  /* ===== 家電名稱（自行修改）===== */
-  const deviceNames = [
-    "房間電燈",
-    "戶外電燈",
-    "客廳電燈",
-    "客廳風扇",
-    "設備5",
-    "設備6",
-    "設備7",
-    "設備8",
-    "設備9"
-  ];
-
-  const deviceState = {};
-  const buttonsDiv = document.getElementById("buttons");
-
-  deviceNames.forEach((name, i) => {
-    const id = i + 1;
-    deviceState[id] = false;
-
-    const btn = document.createElement("button");
-    btn.id = "btn" + id;
-    btn.innerText = `${name}（關）`;
-    btn.onclick = () => sendCmd(id, !deviceState[id]);
-    buttonsDiv.appendChild(btn);
-  });
-
-  /* ===== MQTT 連線 ===== */
-  const client = mqtt.connect(BROKER, {
-    clientId: CLIENT_ID,
-    username: USERNAME,
-    password: PASSWORD,
-    reconnectPeriod: 3000
-  });
-
-  client.on("connect", () => {
-    document.getElementById("status").innerText =
-      "MQTT 已連線 (" + CLIENT_ID + ")";
-    client.subscribe(TOPIC_REPLY);
-  });
-
-  client.on("message", (topic, msg) => {
-    const text = msg.toString(); // #1 power on
-    const m = text.match(/#(\d+)\s+power\s+(on|off)/i);
-    if (!m) return;
-
-    const id = parseInt(m[1]);
-    const on = m[2].toLowerCase() === "on";
-    deviceState[id] = on;
-    updateBtn(id);
-  });
-
-  function sendCmd(id, on) {
-    client.publish(TOPIC_CMD, id + (on ? "1" : "0"));
-  }
-
-  function updateBtn(id) {
-    const btn = document.getElementById("btn" + id);
-    const name = deviceNames[id - 1];
-    btn.classList.toggle("on", deviceState[id]);
-    btn.innerText = `${name}（${deviceState[id] ? "開" : "關"}）`;
-  }
-
-  /* ===== Google 語音輸入 ===== */
-  const SpeechRecognition =
-    window.SpeechRecognition || window.webkitSpeechRecognition;
-
-  if (!SpeechRecognition) {
-    document.getElementById("voiceText").innerText =
-      "⚠ 此瀏覽器不支援語音輸入";
-    return;
-  }
-
-  const recog = new SpeechRecognition();
-  recog.lang = "zh-TW";
-  recog.interimResults = true;
-
-  document.getElementById("voiceBtn").onclick = () => {
-    document.getElementById("voiceText").innerText = "🎧 聆聽中...";
-    recog.start();
-  };
-
-  recog.onresult = (e) => {
-    const text = Array.from(e.results).map(r => r[0].transcript).join("");
-    document.getElementById("voiceText").innerText = text;
-  };
-
-  recog.onend = () => {
-    parseVoice(document.getElementById("voiceText").innerText);
-  };
-
-  function parseVoice(text) {
-    text = text.replace(/\s/g, "");
-
-    deviceNames.forEach((name, i) => {
-      if (!text.includes(name)) return;
-
-      const id = i + 1;
-
-      if (/(開|打開|開啟)/.test(text)) {
-        sendCmd(id, true);
-      }
-      if (/(關|關閉)/.test(text)) {
-        sendCmd(id, false);
-      }
-    });
-  }
-
+/* 建立 9 個按鈕 */
+DEVICE_NAMES.forEach((name, i) => {
+  const id = i + 1;
+  deviceState[id] = false;
+  const btn = document.createElement("button");
+  btn.id = "btn" + id;
+  btn.innerText = name + "（關）";
+  btn.onclick = () => toggleDevice(id);
+  buttonsDiv.appendChild(btn);
 });
+
+/* MQTT 連線 */
+const client = mqtt.connect(BROKER, {
+  username: USERNAME,
+  password: PASSWORD,
+  clientId: CLIENT_ID,
+  reconnectPeriod: 3000
+});
+
+client.on("connect", () => {
+  document.getElementById("status").innerText = "MQTT 已連線";
+  client.subscribe(TOPIC_REPLY);
+  client.publish(TOPIC_CMD, "status");
+});
+
+client.on("message", (topic, message) => {
+  if (topic !== TOPIC_REPLY) return;
+  const text = message.toString();
+  const m = text.match(/#(\d+)\s+power\s+(on|off)/i);
+  if (!m) return;
+  const id = parseInt(m[1]);
+  deviceState[id] = m[2] === "on";
+  updateButton(id);
+});
+
+/* 手動切換 */
+function toggleDevice(id) {
+  const payload = id + (deviceState[id] ? "0" : "1");
+  client.publish(TOPIC_CMD, payload);
+}
+
+/* 更新按鈕 */
+function updateButton(id) {
+  const btn = document.getElementById("btn" + id);
+  if (deviceState[id]) {
+    btn.classList.add("on");
+    btn.innerText = DEVICE_NAMES[id - 1] + "（開）";
+  } else {
+    btn.classList.remove("on");
+    btn.innerText = DEVICE_NAMES[id - 1] + "（關）";
+  }
+}
+
+/* ========= Google 語音輸入 ========= */
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition;
+
+if (SpeechRecognition) {
+  recognition = new SpeechRecognition();
+  recognition.lang = "zh-TW";
+  recognition.continuous = false;
+  recognition.interimResults = true;
+
+  recognition.onstart = () => {
+    voiceText.innerText = "🎧 聆聽中...";
+  };
+
+  recognition.onresult = (event) => {
+    const text = event.results[0][0].transcript;
+    voiceText.innerText = text;
+    handleVoiceCommand(text);
+  };
+
+  recognition.onend = () => {
+    setTimeout(() => voiceText.innerText = "請說指令…", 2000);
+  };
+
+  document.getElementById("micBtn").onclick = () => recognition.start();
+} else {
+  document.getElementById("micBtn").disabled = true;
+  voiceText.innerText = "此瀏覽器不支援語音輸入";
+}
+
+/* ========= 語音指令解析 ========= */
+function handleVoiceCommand(text) {
+  const isOn  = /開|打開|開啟/.test(text);
+  const isOff = /關|關閉/.test(text);
+  if (!isOn && !isOff) return;
+
+  let id = null;
+
+  DEVICE_NAMES.forEach((name, i) => {
+    if (text.includes(name)) id = i + 1;
+  });
+
+  const numMatch = text.match(/第?\s*(\d+)/);
+  if (!id && numMatch) id = parseInt(numMatch[1]);
+
+  if (id && id >= 1 && id <= 9) {
+    client.publish(TOPIC_CMD, id + (isOn ? "1" : "0"));
+  }
+}
 </script>
 
 </body>
