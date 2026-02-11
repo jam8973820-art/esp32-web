@@ -52,6 +52,7 @@ button.on { background: #2ecc71; }
   border: none;
 }
 
+/* ===== 底部語音顯示 ===== */
 #voiceArea {
   position: fixed;
   bottom: 0;
@@ -83,6 +84,7 @@ button.on { background: #2ecc71; }
 </div>
 
 <script>
+/* ===== 裝置名稱 ===== */
 const DEVICE_NAMES = [
   "房間電燈",
   "戶外電燈",
@@ -95,6 +97,7 @@ const DEVICE_NAMES = [
   "設備9"
 ];
 
+/* ===== MQTT 設定 ===== */
 const BROKER = "wss://yb01715d.ala.asia-southeast1.emqxsl.com:8084/mqtt";
 const USERNAME = "jyhon";
 const PASSWORD = "jyhon";
@@ -105,6 +108,7 @@ const CLIENT_ID = "web_" + Math.random().toString(16).substr(2, 8);
 const deviceState = {};
 const buttonsDiv = document.getElementById("buttons");
 
+/* 建立按鈕 */
 DEVICE_NAMES.forEach((name, i) => {
   const id = i + 1;
   deviceState[id] = false;
@@ -115,6 +119,7 @@ DEVICE_NAMES.forEach((name, i) => {
   buttonsDiv.appendChild(btn);
 });
 
+/* MQTT 連線 */
 const client = mqtt.connect(BROKER, {
   username: USERNAME,
   password: PASSWORD,
@@ -122,13 +127,19 @@ const client = mqtt.connect(BROKER, {
   reconnectPeriod: 3000
 });
 
-/* 修正 1：連線成功後，明確訂閱 TOPIC_REPLY 並在無錯誤時發送 STATUS */
 client.on("connect", () => {
   document.getElementById("status").innerText = "MQTT 已連線";
+  
+  // 訂閱主題
   client.subscribe(TOPIC_REPLY, (err) => {
     if (!err) {
-      console.log("訂閱成功，準備發送 STATUS");
+      // 第一次嘗試發送 STATUS
       client.publish(TOPIC_CMD, "STATUS");
+      
+      // 延遲 1.5 秒補送，確保連線穩定後確實觸發 ESP32 回覆
+      setTimeout(() => {
+        client.publish(TOPIC_CMD, "STATUS");
+      }, 1500);
     }
   });
 });
@@ -136,19 +147,21 @@ client.on("connect", () => {
 client.on("message", (topic, message) => {
   if (topic !== TOPIC_REPLY) return;
   const text = message.toString().trim();
-  console.log("收到訊息:", text);
 
-  /* 修正 2：解析 powerXXXXXXXXX (不區分大小寫，確保長度正確) */
-  if (text.toLowerCase().startsWith("power") && text.length >= 14) {
-    const bits = text.substring(5);
+  // --- 1. 批次狀態解析 (例如 power101010000) ---
+  // 使用正規表達式尋找 power 後面接著 9 位數字的格式
+  const batchMatch = text.match(/power\s*([01]{9})/i);
+  if (batchMatch) {
+    const bits = batchMatch[1];
     for (let i = 0; i < 9; i++) {
       const id = i + 1;
       deviceState[id] = (bits[i] === '1');
       updateButton(id);
     }
-    return;
+    return; // 批次更新後直接結束，不跑後面的個別判斷
   }
 
+  // --- 2. 個別狀態解析 (#1 power on/off) ---
   const m = text.match(/#(\d+)\s+power\s+(on|off)/i);
   if (m) {
     const id = parseInt(m[1]);
@@ -175,19 +188,27 @@ function updateButton(id) {
   }
 }
 
-/* 語音部分保持原樣 */
+/* ===== 語音控制 ===== */
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 if (SpeechRecognition) {
   const recognition = new SpeechRecognition();
   recognition.lang = "zh-TW";
   recognition.interimResults = true;
-  recognition.onstart = () => { document.getElementById("voiceText").innerText = "🎧 聆聽中..."; };
+
+  recognition.onstart = () => {
+    document.getElementById("voiceText").innerText = "🎧 聆聽中...";
+  };
+
   recognition.onresult = (e) => {
     const text = e.results[0][0].transcript;
     document.getElementById("voiceText").innerText = text;
     handleVoice(text);
   };
-  recognition.onend = () => { setTimeout(() => document.getElementById("voiceText").innerText = "請說指令…", 2000); };
+
+  recognition.onend = () => {
+    setTimeout(() => document.getElementById("voiceText").innerText = "請說指令…", 2000);
+  };
+
   document.getElementById("micBtn").onclick = () => recognition.start();
 }
 
@@ -195,14 +216,20 @@ function handleVoice(text) {
   const isOn  = /開|打開|開啟/.test(text);
   const isOff = /關|關閉/.test(text);
   if (!isOn && !isOff) return;
+
   let id = null;
-  DEVICE_NAMES.forEach((name, i) => { if (text.includes(name)) id = i + 1; });
+  DEVICE_NAMES.forEach((name, i) => {
+    if (text.includes(name)) id = i + 1;
+  });
+
   const m = text.match(/第?\s*(\d+)/);
   if (!id && m) id = parseInt(m[1]);
+
   if (id >= 1 && id <= 9) {
     client.publish(TOPIC_CMD, id + (isOn ? "1" : "0"));
   }
 }
 </script>
+
 </body>
 </html>
