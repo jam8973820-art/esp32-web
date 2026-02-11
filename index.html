@@ -38,7 +38,6 @@ button {
   background: #aaa;
   color: white;
   cursor: pointer;
-  transition: background 0.3s;
 }
 
 button.on { background: #2ecc71; }
@@ -128,47 +127,39 @@ const client = mqtt.connect(BROKER, {
   reconnectPeriod: 3000
 });
 
-// --- 修改重點：確保訂閱成功後才發送 STATUS ---
 client.on("connect", () => {
   document.getElementById("status").innerText = "MQTT 已連線";
   
-  // 1. 先執行訂閱
+  // 1. 執行訂閱，並在訂閱成功的 callback 中發送 STATUS
   client.subscribe(TOPIC_REPLY, (err) => {
     if (!err) {
-      console.log("訂閱成功，開始發送 STATUS");
-      document.getElementById("status").innerText = "MQTT 已連線 (已訂閱狀態回報)";
-      
-      // 2. 確定訂閱成功後，才發布 STATUS 指令
+      // 確保訂閱完成後才發送 STATUS
       client.publish(TOPIC_CMD, "STATUS");
-    } else {
-      console.error("訂閱失敗:", err);
-      document.getElementById("status").innerText = "MQTT 訂閱失敗";
     }
   });
 });
 
 client.on("message", (topic, message) => {
   if (topic !== TOPIC_REPLY) return;
-  const text = message.toString();
+  const text = message.toString().trim();
 
-  // --- 處理 powerXXXXXXXXX 批次狀態回報 ---
+  // --- 新增：解析批次狀態回報 (例如 power101010000) ---
   if (text.startsWith("power") && text.length >= 14) {
-    const bits = text.substring(5); 
+    const bits = text.substring(5); // 取得 power 後面的 9 位數
     for (let i = 0; i < 9; i++) {
       const id = i + 1;
-      deviceState[id] = bits[i] === "1";
+      deviceState[id] = (bits[i] === "1");
       updateButton(id);
     }
     return;
   }
 
-  // --- 個別狀態解析 (#1 power on/off) ---
+  // --- 原有的個別狀態解析 ---
   const m = text.match(/#(\d+)\s+power\s+(on|off)/i);
-  if (m) {
-    const id = parseInt(m[1]);
-    deviceState[id] = m[2].toLowerCase() === "on";
-    updateButton(id);
-  }
+  if (!m) return;
+  const id = parseInt(m[1]);
+  deviceState[id] = m[2].toLowerCase() === "on";
+  updateButton(id);
 });
 
 function toggleDevice(id) {
@@ -194,30 +185,39 @@ const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecogni
 let recognition;
 
 if (SpeechRecognition) {
-  const voiceText = document.getElementById("voiceText");
-  const micBtn = document.getElementById("micBtn");
-
   recognition = new SpeechRecognition();
   recognition.lang = "zh-TW";
-  recognition.interimResults = false;
+  recognition.interimResults = true;
 
-  recognition.onstart = () => { voiceText.innerText = "🎧 聆聽中..."; };
+  recognition.onstart = () => {
+    document.getElementById("voiceText").innerText = "🎧 聆聽中...";
+  };
+
   recognition.onresult = (e) => {
     const text = e.results[0][0].transcript;
-    voiceText.innerText = text;
+    document.getElementById("voiceText").innerText = text;
     handleVoice(text);
   };
-  recognition.onend = () => { setTimeout(() => voiceText.innerText = "請說指令…", 2000); };
-  micBtn.onclick = () => recognition.start();
+
+  recognition.onend = () => {
+    setTimeout(() => document.getElementById("voiceText").innerText = "請說指令…", 2000);
+  };
+
+  document.getElementById("micBtn").onclick = () => recognition.start();
 }
 
+/* ===== 語音指令解析 ===== */
 function handleVoice(text) {
   const isOn  = /開|打開|開啟/.test(text);
   const isOff = /關|關閉/.test(text);
   if (!isOn && !isOff) return;
 
   let id = null;
-  DEVICE_NAMES.forEach((name, i) => { if (text.includes(name)) id = i + 1; });
+
+  DEVICE_NAMES.forEach((name, i) => {
+    if (text.includes(name)) id = i + 1;
+  });
+
   const m = text.match(/第?\s*(\d+)/);
   if (!id && m) id = parseInt(m[1]);
 
