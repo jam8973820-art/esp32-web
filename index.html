@@ -38,6 +38,7 @@ button {
   background: #aaa;
   color: white;
   cursor: pointer;
+  transition: background 0.3s;
 }
 
 button.on { background: #2ecc71; }
@@ -84,7 +85,7 @@ button.on { background: #2ecc71; }
 </div>
 
 <script>
-/* ===== 裝置名稱（完全還原你的原始設定） ===== */
+/* ===== 裝置名稱 ===== */
 const DEVICE_NAMES = [
   "房間電燈",
   "戶外電燈",
@@ -127,20 +128,47 @@ const client = mqtt.connect(BROKER, {
   reconnectPeriod: 3000
 });
 
+// --- 修改重點：確保訂閱成功後才發送 STATUS ---
 client.on("connect", () => {
   document.getElementById("status").innerText = "MQTT 已連線";
-  client.subscribe(TOPIC_REPLY);
-  client.publish(TOPIC_CMD, "status");
+  
+  // 1. 先執行訂閱
+  client.subscribe(TOPIC_REPLY, (err) => {
+    if (!err) {
+      console.log("訂閱成功，開始發送 STATUS");
+      document.getElementById("status").innerText = "MQTT 已連線 (已訂閱狀態回報)";
+      
+      // 2. 確定訂閱成功後，才發布 STATUS 指令
+      client.publish(TOPIC_CMD, "STATUS");
+    } else {
+      console.error("訂閱失敗:", err);
+      document.getElementById("status").innerText = "MQTT 訂閱失敗";
+    }
+  });
 });
 
 client.on("message", (topic, message) => {
   if (topic !== TOPIC_REPLY) return;
   const text = message.toString();
+
+  // --- 處理 powerXXXXXXXXX 批次狀態回報 ---
+  if (text.startsWith("power") && text.length >= 14) {
+    const bits = text.substring(5); 
+    for (let i = 0; i < 9; i++) {
+      const id = i + 1;
+      deviceState[id] = bits[i] === "1";
+      updateButton(id);
+    }
+    return;
+  }
+
+  // --- 個別狀態解析 (#1 power on/off) ---
   const m = text.match(/#(\d+)\s+power\s+(on|off)/i);
-  if (!m) return;
-  const id = parseInt(m[1]);
-  deviceState[id] = m[2] === "on";
-  updateButton(id);
+  if (m) {
+    const id = parseInt(m[1]);
+    deviceState[id] = m[2].toLowerCase() === "on";
+    updateButton(id);
+  }
 });
 
 function toggleDevice(id) {
@@ -150,6 +178,7 @@ function toggleDevice(id) {
 
 function updateButton(id) {
   const btn = document.getElementById("btn" + id);
+  if (!btn) return;
   const name = DEVICE_NAMES[id - 1];
   if (deviceState[id]) {
     btn.classList.add("on");
@@ -165,39 +194,30 @@ const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecogni
 let recognition;
 
 if (SpeechRecognition) {
+  const voiceText = document.getElementById("voiceText");
+  const micBtn = document.getElementById("micBtn");
+
   recognition = new SpeechRecognition();
   recognition.lang = "zh-TW";
-  recognition.interimResults = true;
+  recognition.interimResults = false;
 
-  recognition.onstart = () => {
-    voiceText.innerText = "🎧 聆聽中...";
-  };
-
+  recognition.onstart = () => { voiceText.innerText = "🎧 聆聽中..."; };
   recognition.onresult = (e) => {
     const text = e.results[0][0].transcript;
     voiceText.innerText = text;
     handleVoice(text);
   };
-
-  recognition.onend = () => {
-    setTimeout(() => voiceText.innerText = "請說指令…", 2000);
-  };
-
+  recognition.onend = () => { setTimeout(() => voiceText.innerText = "請說指令…", 2000); };
   micBtn.onclick = () => recognition.start();
 }
 
-/* ===== 語音指令解析 ===== */
 function handleVoice(text) {
   const isOn  = /開|打開|開啟/.test(text);
   const isOff = /關|關閉/.test(text);
   if (!isOn && !isOff) return;
 
   let id = null;
-
-  DEVICE_NAMES.forEach((name, i) => {
-    if (text.includes(name)) id = i + 1;
-  });
-
+  DEVICE_NAMES.forEach((name, i) => { if (text.includes(name)) id = i + 1; });
   const m = text.match(/第?\s*(\d+)/);
   if (!id && m) id = parseInt(m[1]);
 
