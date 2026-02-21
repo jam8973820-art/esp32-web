@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>ESP8266 家電控制</title>
+<title>ESP32-S3 家電控制</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
@@ -14,22 +14,70 @@ body {
   margin: 0;
   padding-bottom: 80px;
 }
+
 h2 { margin: 16px 0; }
-#status { margin-bottom: 10px; font-size: 16px; }
-.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 360px; margin: auto; }
-button { height: 70px; font-size: 18px; border-radius: 8px; border: none; background: #aaa; color: white; cursor: pointer; }
+
+#status {
+  margin-bottom: 10px;
+  font-size: 16px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  max-width: 360px;
+  margin: auto;
+}
+
+button {
+  height: 70px;
+  font-size: 18px;
+  border-radius: 8px;
+  border: none;
+  background: #aaa;
+  color: white;
+  cursor: pointer;
+}
+
 button.on { background: #2ecc71; }
-#micBtn { margin: 15px; padding: 10px 20px; font-size: 16px; border-radius: 20px; background: #4285f4; color: white; border: none; }
-#voiceArea { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #ddd; padding: 10px; }
-#voiceText { min-height: 24px; font-size: 16px; }
+
+#micBtn {
+  margin: 15px;
+  padding: 10px 20px;
+  font-size: 16px;
+  border-radius: 20px;
+  background: #4285f4;
+  color: white;
+  border: none;
+}
+
+#voiceArea {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #fff;
+  border-top: 1px solid #ddd;
+  padding: 10px;
+}
+
+#voiceText {
+  min-height: 24px;
+  font-size: 16px;
+}
 </style>
 </head>
 
 <body>
-<h2>ESP8266 家電控制</h2>
+
+<h2>ESP32-S3 家電控制</h2>
 <div id="status">MQTT 連線中...</div>
+
 <div class="grid" id="buttons"></div>
+
 <button id="micBtn">🎤 語音控制</button>
+
 <div id="voiceArea">
   <div id="voiceText">請說指令…</div>
 </div>
@@ -37,8 +85,15 @@ button.on { background: #2ecc71; }
 <script>
 /* ===== 裝置名稱 ===== */
 const DEVICE_NAMES = [
-  "房間電燈","戶外電燈","客廳電燈","客廳風扇",
-  "設備5","設備6","設備7","設備8","設備9"
+  "房間電燈",
+  "戶外電燈",
+  "客廳電燈",
+  "客廳風扇",
+  "設備5",
+  "設備6",
+  "設備7",
+  "設備8",
+  "設備9"
 ];
 
 /* ===== MQTT 設定 ===== */
@@ -71,18 +126,21 @@ const client = mqtt.connect(BROKER, {
 
 client.on("connect", () => {
   document.getElementById("status").innerText = "MQTT 已連線";
-  
+
   // 訂閱所有 sw*/state 主題
-  for (let i=1;i<=9;i++) {
-    client.subscribe(`jam1liau2/sw${i}/state`);
+  for (let i = 1; i <= 9; i++) {
+    client.subscribe(`jam1liau2/sw${i}/state`, (err) => {
+      if (err) console.log(`訂閱 sw${i}/state 失敗`, err);
+    });
   }
 });
 
+/* 處理收到訊息 */
 client.on("message", (topic, message) => {
   const text = message.toString().trim();
 
-  // 處理 sw*/state 訊息
-  const swMatch = topic.match(/jam1liau2\/sw(\d+)\/state/);
+  // 匹配 jam1liau2/sw*/state
+  const swMatch = topic.trim().match(/jam1liau2\/sw(\d+)\/state/i);
   if (swMatch) {
     const id = parseInt(swMatch[1]);
     deviceState[id] = (text.toUpperCase() === "ON");
@@ -90,11 +148,13 @@ client.on("message", (topic, message) => {
   }
 });
 
+/* 切換裝置 */
 function toggleDevice(id) {
-  const payload = deviceState[id] ? "OFF" : "ON";
+  const payload = id + (deviceState[id] ? "0" : "1");
   client.publish(`jam1liau2/sw${id}/set`, payload);
 }
 
+/* 更新按鈕顏色 */
 function updateButton(id) {
   const btn = document.getElementById("btn" + id);
   if (!btn) return;
@@ -115,7 +175,9 @@ if (SpeechRecognition) {
   recognition.lang = "zh-TW";
   recognition.interimResults = true;
 
-  recognition.onstart = () => { document.getElementById("voiceText").innerText = "🎧 聆聽中..."; };
+  recognition.onstart = () => {
+    document.getElementById("voiceText").innerText = "🎧 聆聽中...";
+  };
 
   recognition.onresult = (e) => {
     const text = e.results[0][0].transcript;
@@ -136,12 +198,15 @@ function handleVoice(text) {
   if (!isOn && !isOff) return;
 
   let id = null;
-  DEVICE_NAMES.forEach((name, i) => { if (text.includes(name)) id = i + 1; });
+  DEVICE_NAMES.forEach((name, i) => {
+    if (text.includes(name)) id = i + 1;
+  });
+
   const m = text.match(/第?\s*(\d+)/);
   if (!id && m) id = parseInt(m[1]);
 
   if (id >= 1 && id <= 9) {
-    client.publish(`jam1liau2/sw${id}/set`, isOn ? "ON" : "OFF");
+    client.publish(`jam1liau2/sw${id}/set`, id + (isOn ? "1" : "0"));
   }
 }
 </script>
