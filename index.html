@@ -206,7 +206,7 @@ function handleVoice(text) {
   if (!id && m) id = parseInt(m[1]);
 
   if (id >= 1 && id <= 9) {
-    client.publish(`jam1liau2/sw${id}/set`, id + (isOn ? "1" : "0"));
+    client.publish(`jam1liau2/sw${id}/set`, (isOn ? "ON" : "OFF"));
   }
 }
 </script>
