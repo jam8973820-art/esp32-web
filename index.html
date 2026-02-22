@@ -148,10 +148,19 @@ client.on("message", (topic, message) => {
   }
 });
 
-/* 切換裝置 */
+/* 切換裝置 - 修正版 */
 function toggleDevice(id) {
-  const payload = (deviceState[id] ? "ON" : "OFF");
-  client.publish(`jam1liau2/sw${id}/set`, payload);
+  // 核心修正：如果現在是 true(ON)，則發送 OFF；反之發送 ON
+  const targetState = deviceState[id] ? "OFF" : "ON";
+  
+  console.log(`發送指令：sw${id} -> ${targetState}`); // 調試用
+  
+  client.publish(`jam1liau2/sw${id}/set`, targetState, { qos: 1 });
+  
+  /* 選擇性：預判更新 (讓 UI 反應更快)
+     如果您希望按下瞬間按鈕就變色，而不等 MQTT 回傳，可以取消下方註釋 */
+  // deviceState[id] = !deviceState[id];
+  // updateButton(id);
 }
 
 /* 更新按鈕顏色 */
