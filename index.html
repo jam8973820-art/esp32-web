@@ -150,7 +150,7 @@ client.on("message", (topic, message) => {
 
 /* 切換裝置 */
 function toggleDevice(id) {
-  const payload = id + (deviceState[id] ? "0" : "1");
+  const payload = (deviceState[id] ? "ON" : "OFF");
   client.publish(`jam1liau2/sw${id}/set`, payload);
 }
 
