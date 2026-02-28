@@ -155,8 +155,10 @@ function toggleDevice(id) {
   
   console.log(`發送指令：sw${id} -> ${targetState}`); // 調試用
   
-  client.publish(`jam1liau2/sw${id}/set`, targetState, { qos: 1 });
-  
+  // 修改方式 B (使用變數 targetState)
+
+  client.publish(`jam1liau2/sw${id}/set`, targetState, { qos: 1, retain: true });
+
   /* 選擇性：預判更新 (讓 UI 反應更快)
      如果您希望按下瞬間按鈕就變色，而不等 MQTT 回傳，可以取消下方註釋 */
   // deviceState[id] = !deviceState[id];
@@ -215,7 +217,9 @@ function handleVoice(text) {
   if (!id && m) id = parseInt(m[1]);
 
   if (id >= 1 && id <= 9) {
-    client.publish(`jam1liau2/sw${id}/set`, (isOn ? "ON" : "OFF"));
+    // 修改方式 A (直接判斷 isOn)
+
+    client.publish(`jam1liau2/sw${id}/set`, (isOn ? "ON" : "OFF"), { qos: 1, retain: true });
   }
 }
 </script>
