@@ -292,4 +292,29 @@ function syncToDevice() {
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 if (SpeechRecognition) {
   const recognition = new SpeechRecognition();
-  recognition.lang = "
+  recognition.lang = "zh-TW";
+  recognition.interimResults = true;
+  recognition.onstart = () => { document.getElementById("voiceText").innerText = "🎧 聆聽中..."; };
+  recognition.onresult = (e) => {
+    const text = e.results[0][0].transcript;
+    document.getElementById("voiceText").innerText = text;
+    handleVoice(text);
+  };
+  recognition.onend = () => { setTimeout(() => document.getElementById("voiceText").innerText = "請說指令…", 2000); };
+  document.getElementById("micBtn").onclick = () => recognition.start();
+}
+
+function handleVoice(text) {
+  const isOn = /開|打開|開啟/.test(text);
+  const isOff = /關|關閉/.test(text);
+  if (!isOn && !isOff) return;
+  let id = null;
+  DEVICE_NAMES.forEach((name, i) => { if (text.includes(name)) id = i + 1; });
+  const m = text.match(/第?\s*(\d+)/);
+  if (!id && m) id = parseInt(m[1]);
+  if (id >= 1 && id <= 9) client.publish(`jam1liau2/sw${id}/set`, (isOn ? "ON" : "OFF"), { qos: 1, retain: true });
+}
+</script>
+
+</body>
+</html>
