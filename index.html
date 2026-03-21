@@ -2,210 +2,173 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>ESP32-S3 家電控制系統</title>
+<title>ESP32-S3 家電控制</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-
 <style>
-body { font-family: Arial, sans-serif; background: #f5f5f5; text-align: center; margin: 0; padding-bottom: 100px; }
-h2, h3 { margin: 15px 0; }
-#status { font-size: 14px; color: #666; margin-bottom: 10px; }
+body { font-family: sans-serif; background: #f0f2f5; text-align: center; margin: 0; padding-bottom: 80px; }
+h3 { margin: 10px 0; font-size: 16px; color: #333; }
+#status { font-size: 12px; color: #888; margin: 5px; }
 
-/* 實時控制按鈕 */
-.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 380px; margin: auto; padding: 0 10px; }
-.device-btn { height: 65px; font-size: 16px; border-radius: 8px; border: none; background: #aaa; color: white; cursor: pointer; }
+/* 實時按鈕區 */
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 400px; margin: auto; padding: 0 10px; }
+.device-btn { height: 60px; font-size: 15px; border-radius: 8px; border: none; background: #bbb; color: white; cursor: pointer; }
 .device-btn.on { background: #2ecc71; }
 
-/* 定時任務選單 (10個按鈕) */
-.schedule-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 380px; margin: 15px auto; padding: 0 10px; }
-.task-sel-btn { padding: 10px 0; border-radius: 6px; border: 2px solid #ddd; background: #fff; cursor: pointer; font-weight: bold; }
-.task-sel-btn.active { background: #2ecc71; color: white; border-color: #27ae60; }
-.task-sel-btn.editing { border-color: #4285f4; box-shadow: 0 0 5px #4285f4; }
+/* 任務選擇 1-10 */
+.task-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; max-width: 400px; margin: 10px auto; padding: 0 10px; }
+.task-sel-btn { padding: 8px 0; border-radius: 5px; border: 1px solid #ccc; background: #fff; cursor: pointer; font-size: 14px; }
+.task-sel-btn.active { background: #2ecc71; color: white; border-color: #27ae60; font-weight: bold; }
+.task-sel-btn.editing { background: #4285f4; color: white; border-color: #3367d6; box-shadow: inset 0 0 5px rgba(0,0,0,0.2); }
 
-/* 編輯區域 */
-.edit-container { max-width: 360px; margin: 15px auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: none; }
-.edit-row { margin: 15px 0; display: flex; justify-content: space-between; align-items: center; }
-select { padding: 8px; font-size: 16px; border-radius: 5px; border: 1px solid #ccc; width: 65%; }
-.save-btn { background: #e67e22; color: white; padding: 12px; width: 100%; border-radius: 25px; border: none; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+/* 橫向編輯區 */
+.edit-box { 
+  max-width: 380px; margin: 10px auto; background: #fff; padding: 12px; 
+  border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: none; 
+}
+.edit-header { font-weight: bold; color: #4285f4; margin-bottom: 10px; font-size: 14px; text-align: left; }
+.flex-row { display: flex; justify-content: space-between; gap: 4px; }
+.input-group { flex: 1; display: flex; flex-direction: column; align-items: center; }
+.input-group label { font-size: 11px; color: #777; margin-bottom: 3px; }
+select { width: 100%; padding: 5px 2px; font-size: 14px; border-radius: 4px; border: 1px solid #ddd; }
 
-#micBtn { margin: 15px; padding: 10px 20px; font-size: 16px; border-radius: 20px; background: #4285f4; color: white; border: none; }
-#voiceArea { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #ddd; padding: 10px; z-index: 100; }
+.save-btn { 
+  margin-top: 12px; width: 100%; padding: 10px; background: #e67e22; 
+  color: white; border: none; border-radius: 5px; font-size: 15px; font-weight: bold; cursor: pointer; 
+}
+
+#micBtn { margin-top: 15px; padding: 8px 20px; border-radius: 20px; background: #4285f4; color: white; border: none; }
+#voiceArea { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #ddd; padding: 8px; }
 </style>
 </head>
 
 <body>
 
-<h2>ESP32-S3 家電控制</h2>
+<h3>ESP32-S3 控制面板</h3>
 <div id="status">MQTT 連線中...</div>
 
-<div class="grid" id="relayButtons"></div>
+<div class="grid" id="relayGroup"></div>
 
-<hr style="margin:25px 0; border:0; border-top:1px solid #ddd;">
+<div class="task-grid" id="taskGroup"></div>
 
-<h3>🕒 定時任務設定 (1-10)</h3>
-<div class="schedule-grid" id="taskSelectors"></div>
-
-<div class="edit-container" id="editArea">
-  <h4 id="editTitle" style="margin-top:0; color:#4285f4;">修改任務 #1</h4>
-  <div class="edit-row">
-    <span>啟用狀態</span>
-    <select id="editEn">
-      <option value="true">啟用 (ON)</option>
-      <option value="false">停用 (OFF)</option>
-    </select>
-  </div>
-  <div class="edit-row">
-    <span>觸發時間</span>
-    <div style="width:65%; display:flex; justify-content: space-between;">
-      <select id="editH" style="width:45%;"></select>：
-      <select id="editM" style="width:45%;"></select>
+<div class="edit-box" id="editor">
+  <div class="edit-header" id="editLabel">編輯任務 #1</div>
+  <div class="flex-row">
+    <div class="input-group">
+      <label>開關</label>
+      <select id="edEn"><option value="true">啟用</option><option value="false">停用</option></select>
+    </div>
+    <div class="input-group">
+      <label>時間</label>
+      <div style="display:flex; width:100%;">
+        <select id="edH"></select><select id="edM"></select>
+      </div>
+    </div>
+    <div class="input-group" style="flex: 1.5;">
+      <label>裝置</label>
+      <select id="edID"></select>
+    </div>
+    <div class="input-group">
+      <label>動作</label>
+      <select id="edCmd"><option value="ON">開啟</option><option value="OFF">關閉</option></select>
     </div>
   </div>
-  <div class="edit-row">
-    <span>控制裝置</span>
-    <select id="editID"></select>
-  </div>
-  <div class="edit-row">
-    <span>動作</span>
-    <select id="editCmd">
-      <option value="ON">開啟</option>
-      <option value="OFF">關閉</option>
-    </select>
-  </div>
-  <button class="save-btn" onclick="saveAndSync()">💾 儲存並同步到設備</button>
+  <button class="save-btn" onclick="applyChange()">儲存並同步</button>
 </div>
 
-<button id="micBtn">🎤 語音控制</button>
-<div id="voiceArea"><div id="voiceText">請說指令…</div></div>
+<button id="micBtn">🎤 語音</button>
+<div id="voiceArea"><div id="voiceText" style="font-size:14px;">等待指令...</div></div>
 
 <script>
-const DEVICE_NAMES = ["房間電燈", "戶外電燈", "客廳電燈", "客廳風扇", "設備5", "設備6", "設備7", "設備8", "設備9"];
+const DEVS = ["房間電燈", "戶外電燈", "客廳電燈", "客廳風扇", "設備5", "設備6", "設備7", "設備8", "設備9"];
 const BROKER = "wss://yb01715d.ala.asia-southeast1.emqxsl.com:8084/mqtt";
-const CLIENT_ID = "web_" + Math.random().toString(16).substr(2, 8);
+const client = mqtt.connect(BROKER, { username: "jyhon", password: "jyhon", clientId: "web_"+Math.random().toString(16).substr(2,6) });
 
-let scheduleData = Array.from({ length: 10 }, () => ({ en: false, h: 0, m: 0, id: 1, cmd: "OFF" }));
-let currentEditIndex = -1;
-const deviceState = {};
+let scheds = Array.from({ length: 10 }, () => ({ en: false, h: 0, m: 0, id: 1, cmd: "OFF" }));
+let editIdx = -1;
+const swState = {};
 
-/* --- 初始化選單內容 --- */
-function initOptions() {
-  const selH = document.getElementById("editH");
-  const selM = document.getElementById("editM");
-  const selID = document.getElementById("editID");
-  for (let i = 0; i < 24; i++) selH.add(new Option(i < 10 ? "0"+i : i, i));
-  for (let i = 0; i < 60; i++) selM.add(new Option(i < 10 ? "0"+i : i, i));
-  DEVICE_NAMES.forEach((name, i) => selID.add(new Option(name, i + 1)));
-}
-
-/* --- 1. 生成 RELAY 控制按鈕 --- */
-function renderRelayButtons() {
-  const container = document.getElementById("relayButtons");
-  container.innerHTML = "";
-  DEVICE_NAMES.forEach((name, i) => {
-    const id = i + 1;
-    deviceState[id] = false;
+// 初始化選單
+function init() {
+  const h = document.getElementById("edH"), m = document.getElementById("edM"), id = document.getElementById("edID");
+  for (let i=0; i<24; i++) h.add(new Option(i<10?"0"+i:i, i));
+  for (let i=0; i<60; i++) m.add(new Option(i<10?"0"+i:i, i));
+  DEVS.forEach((n, i) => id.add(new Option(n, i+1)));
+  
+  // 生成 RELAY 按鈕
+  const rg = document.getElementById("relayGroup");
+  DEVS.forEach((n, i) => {
     const btn = document.createElement("button");
-    btn.id = "btn" + id;
-    btn.className = "device-btn";
-    btn.innerText = `${name}\n(關)`;
-    btn.onclick = () => {
-      const target = deviceState[id] ? "OFF" : "ON";
-      client.publish(`jam1liau2/sw${id}/set`, target, { qos: 1, retain: true });
+    btn.id = "sw" + (i+1); btn.className = "device-btn";
+    btn.innerText = n; btn.onclick = () => {
+      client.publish(`jam1liau2/sw${i+1}/set`, swState[i+1]?"OFF":"ON", {retain:true});
     };
-    container.appendChild(btn);
+    rg.appendChild(btn);
   });
+  renderTasks();
 }
 
-/* --- 2. 生成 10 個任務選擇按鈕 --- */
-function renderTaskSelectors() {
-  const container = document.getElementById("taskSelectors");
-  container.innerHTML = "";
-  scheduleData.forEach((item, i) => {
+function renderTasks() {
+  const tg = document.getElementById("taskGroup");
+  tg.innerHTML = "";
+  scheds.forEach((s, i) => {
     const btn = document.createElement("button");
-    btn.className = "task-sel-btn" + (item.en ? " active" : "");
-    if (currentEditIndex === i) btn.classList.add("editing");
+    btn.className = "task-sel-btn" + (s.en?" active":"");
+    if(editIdx === i) btn.classList.add("editing");
     btn.innerText = i + 1;
-    btn.onclick = () => openEditor(i);
-    container.appendChild(btn);
+    btn.onclick = () => {
+      editIdx = i;
+      document.getElementById("editor").style.display = "block";
+      document.getElementById("editLabel").innerText = "編輯任務 #" + (i+1);
+      document.getElementById("edEn").value = s.en.toString();
+      document.getElementById("edH").value = s.h;
+      document.getElementById("edM").value = s.m;
+      document.getElementById("edID").value = s.id;
+      document.getElementById("edCmd").value = s.cmd;
+      renderTasks();
+    };
+    tg.appendChild(btn);
   });
 }
 
-/* --- 3. 開啟編輯器 --- */
-function openEditor(index) {
-  currentEditIndex = index;
-  const item = scheduleData[index];
-  document.getElementById("editArea").style.display = "block";
-  document.getElementById("editTitle").innerText = `修改任務 #${index + 1}`;
-  
-  document.getElementById("editEn").value = item.en.toString();
-  document.getElementById("editH").value = item.h;
-  document.getElementById("editM").value = item.m;
-  document.getElementById("editID").value = item.id;
-  document.getElementById("editCmd").value = item.cmd;
-  
-  renderTaskSelectors(); // 更新按鈕樣式(高亮當前編輯)
-  window.scrollTo({ top: document.getElementById("editArea").offsetTop - 20, behavior: 'smooth' });
-}
-
-/* --- 4. 儲存並同步 --- */
-function saveAndSync() {
-  if (currentEditIndex === -1) return;
-  
-  // 更新本地陣列
-  scheduleData[currentEditIndex] = {
-    en: document.getElementById("editEn").value === "true",
-    h: parseInt(document.getElementById("editH").value),
-    m: parseInt(document.getElementById("editM").value),
-    id: parseInt(document.getElementById("editID").value),
-    cmd: document.getElementById("editCmd").value
+function applyChange() {
+  if(editIdx === -1) return;
+  scheds[editIdx] = {
+    en: document.getElementById("edEn").value === "true",
+    h: parseInt(document.getElementById("edH").value),
+    m: parseInt(document.getElementById("edM").value),
+    id: parseInt(document.getElementById("edID").value),
+    cmd: document.getElementById("edCmd").value
   };
-  
-  // MQTT 上傳
-  client.publish("jam1liau2/schedule/set", JSON.stringify(scheduleData), { qos: 1 });
-  
-  renderTaskSelectors();
-  alert(`任務 #${currentEditIndex + 1} 已儲存並同步！`);
+  client.publish("jam1liau2/schedule/set", JSON.stringify(scheds), {qos:1});
+  renderTasks();
+  alert("已儲存同步");
 }
-
-/* --- MQTT 邏輯 --- */
-const client = mqtt.connect(BROKER, { username: "jyhon", password: "jyhon", clientId: CLIENT_ID });
 
 client.on("connect", () => {
   document.getElementById("status").innerText = "MQTT 已連線";
-  for (let i = 1; i <= 9; i++) client.subscribe(`jam1liau2/sw${i}/state`);
+  for (let i=1; i<=9; i++) client.subscribe(`jam1liau2/sw${i}/state`);
   client.subscribe("jam1liau2/schedule/status");
   client.publish("jam1liau2/schedule/get", "RELOAD");
 });
 
-client.on("message", (topic, message) => {
-  const msg = message.toString().trim();
-  
-  // 處理 RELAY 狀態
-  const swMatch = topic.match(/jam1liau2\/sw(\d+)\/state/);
-  if (swMatch) {
-    const id = parseInt(swMatch[1]);
-    deviceState[id] = (msg === "ON");
-    const btn = document.getElementById("btn" + id);
-    if (btn) {
-      btn.classList.toggle("on", deviceState[id]);
-      btn.innerText = `${DEVICE_NAMES[id-1]}\n(${deviceState[id]?'開':'關'})`;
+client.on("message", (t, m) => {
+  const msg = m.toString();
+  const swM = t.match(/sw(\d+)\/state/);
+  if(swM) {
+    const id = swM[1]; swState[id] = (msg === "ON");
+    const b = document.getElementById("sw"+id);
+    if(b) {
+      b.classList.toggle("on", swState[id]);
+      b.innerText = DEVS[id-1] + (swState[id]?"(開)":"(關)");
     }
   }
-  
-  // 處理定時任務讀取
-  if (topic === "jam1liau2/schedule/status") {
-    scheduleData = JSON.parse(msg);
-    renderTaskSelectors();
-    if (currentEditIndex !== -1) openEditor(currentEditIndex); // 若正在編輯則重新填入
+  if(t === "jam1liau2/schedule/status") {
+    scheds = JSON.parse(msg); renderTasks();
   }
 });
 
-// 初始化執行
-initOptions();
-renderRelayButtons();
-renderTaskSelectors();
-
-/* 語音控制 (略, 保持原樣) */
+init();
 </script>
 </body>
 </html>
