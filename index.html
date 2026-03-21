@@ -12,27 +12,29 @@ body {
   background: #f5f5f5;
   text-align: center;
   margin: 0;
-  padding-bottom: 80px;
+  padding-bottom: 100px;
 }
 
-h2 { margin: 16px 0; }
+h2, h3 { margin: 16px 0; }
 
 #status {
   margin-bottom: 10px;
-  font-size: 16px;
+  font-size: 14px;
+  color: #666;
 }
 
 .grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  max-width: 360px;
+  gap: 10px;
+  max-width: 380px;
   margin: auto;
+  padding: 0 10px;
 }
 
-button {
-  height: 70px;
-  font-size: 18px;
+button.device-btn {
+  height: 65px;
+  font-size: 16px;
   border-radius: 8px;
   border: none;
   background: #aaa;
@@ -40,7 +42,54 @@ button {
   cursor: pointer;
 }
 
-button.on { background: #2ecc71; }
+button.device-btn.on { background: #2ecc71; }
+
+/* 定時設定區塊樣式 */
+.schedule-container {
+  max-width: 380px;
+  margin: 20px auto;
+  background: white;
+  padding: 15px;
+  border-radius: 12px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.schedule-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  padding: 8px;
+  background: #f9f9f9;
+  border-radius: 5px;
+  font-size: 14px;
+}
+
+.schedule-controls {
+  margin-top: 15px;
+  border-top: 1px solid #eee;
+  padding-top: 15px;
+}
+
+select {
+  padding: 5px;
+  font-size: 14px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+}
+
+.action-btn {
+  padding: 8px 12px;
+  border-radius: 5px;
+  border: none;
+  cursor: pointer;
+  margin: 5px;
+  font-size: 14px;
+}
+
+.add-btn { background: #4285f4; color: white; }
+.sync-btn { background: #e67e22; color: white; width: 90%; font-weight: bold; }
+.del-btn { background: #e74c3c; color: white; padding: 2px 8px; }
 
 #micBtn {
   margin: 15px;
@@ -60,6 +109,7 @@ button.on { background: #2ecc71; }
   background: #fff;
   border-top: 1px solid #ddd;
   padding: 10px;
+  z-index: 100;
 }
 
 #voiceText {
@@ -78,6 +128,28 @@ button.on { background: #2ecc71; }
 
 <button id="micBtn">🎤 語音控制</button>
 
+<div class="schedule-container">
+  <h3>🕒 定時任務管理</h3>
+  <div id="scheduleList">
+    <div style="color:#999; font-size:12px; margin:10px;">目前尚無設定</div>
+  </div>
+
+  <div class="schedule-controls">
+    <div>
+      <select id="selEn"><option value="true">啟用</option><option value="false">停用</option></select>
+      <select id="selH"></select>時
+      <select id="selM"></select>分
+    </div>
+    <div style="margin-top:10px;">
+      <select id="selID"></select>
+      <select id="selCmd"><option value="ON">開啟</option><option value="OFF">關閉</option></select>
+      <button class="action-btn add-btn" onclick="addSchedule()">➕ 新增</button>
+    </div>
+    <hr>
+    <button class="action-btn sync-btn" onclick="syncToDevice()">☁️ 同步設定到設備</button>
+  </div>
+</div>
+
 <div id="voiceArea">
   <div id="voiceText">請說指令…</div>
 </div>
@@ -85,15 +157,8 @@ button.on { background: #2ecc71; }
 <script>
 /* ===== 裝置名稱 ===== */
 const DEVICE_NAMES = [
-  "房間電燈",
-  "戶外電燈",
-  "客廳電燈",
-  "客廳風扇",
-  "設備5",
-  "設備6",
-  "設備7",
-  "設備8",
-  "設備9"
+  "房間電燈", "戶外電燈", "客廳電燈", "客廳風扇",
+  "設備5", "設備6", "設備7", "設備8", "設備9"
 ];
 
 /* ===== MQTT 設定 ===== */
@@ -103,7 +168,20 @@ const PASSWORD = "jyhon";
 const CLIENT_ID = "web_" + Math.random().toString(16).substr(2, 8);
 
 const deviceState = {};
+const scheduleData = []; // 存儲定時任務陣列
 const buttonsDiv = document.getElementById("buttons");
+
+/* 初始化選單內容 */
+function initSelects() {
+  const selH = document.getElementById("selH");
+  const selM = document.getElementById("selM");
+  const selID = document.getElementById("selID");
+
+  for (let i = 0; i < 24; i++) selH.add(new Option(i < 10 ? "0"+i : i, i));
+  for (let i = 0; i < 60; i += 5) selM.add(new Option(i < 10 ? "0"+i : i, i)); // 每5分鐘一個級距
+  DEVICE_NAMES.forEach((name, i) => selID.add(new Option(name, i + 1)));
+}
+initSelects();
 
 /* 建立按鈕 */
 DEVICE_NAMES.forEach((name, i) => {
@@ -111,6 +189,7 @@ DEVICE_NAMES.forEach((name, i) => {
   deviceState[id] = false;
   const btn = document.createElement("button");
   btn.id = "btn" + id;
+  btn.className = "device-btn";
   btn.innerText = `${name}（關）`;
   btn.onclick = () => toggleDevice(id);
   buttonsDiv.appendChild(btn);
@@ -126,20 +205,13 @@ const client = mqtt.connect(BROKER, {
 
 client.on("connect", () => {
   document.getElementById("status").innerText = "MQTT 已連線";
-
-  // 訂閱所有 sw*/state 主題
   for (let i = 1; i <= 9; i++) {
-    client.subscribe(`jam1liau2/sw${i}/state`, (err) => {
-      if (err) console.log(`訂閱 sw${i}/state 失敗`, err);
-    });
+    client.subscribe(`jam1liau2/sw${i}/state`);
   }
 });
 
-/* 處理收到訊息 */
 client.on("message", (topic, message) => {
   const text = message.toString().trim();
-
-  // 匹配 jam1liau2/sw*/state
   const swMatch = topic.trim().match(/jam1liau2\/sw(\d+)\/state/i);
   if (swMatch) {
     const id = parseInt(swMatch[1]);
@@ -148,24 +220,11 @@ client.on("message", (topic, message) => {
   }
 });
 
-/* 切換裝置 - 修正版 */
 function toggleDevice(id) {
-  // 核心修正：如果現在是 true(ON)，則發送 OFF；反之發送 ON
   const targetState = deviceState[id] ? "OFF" : "ON";
-  
-  console.log(`發送指令：sw${id} -> ${targetState}`); // 調試用
-  
-  // 修改方式 B (使用變數 targetState)
-
   client.publish(`jam1liau2/sw${id}/set`, targetState, { qos: 1, retain: true });
-
-  /* 選擇性：預判更新 (讓 UI 反應更快)
-     如果您希望按下瞬間按鈕就變色，而不等 MQTT 回傳，可以取消下方註釋 */
-  // deviceState[id] = !deviceState[id];
-  // updateButton(id);
 }
 
-/* 更新按鈕顏色 */
 function updateButton(id) {
   const btn = document.getElementById("btn" + id);
   if (!btn) return;
@@ -179,46 +238,83 @@ function updateButton(id) {
   }
 }
 
-/* ===== 語音控制 ===== */
+/* ===== 定時任務邏輯 ===== */
+function addSchedule() {
+  if (scheduleData.length >= 10) { alert("最多只能設定 10 組任務"); return; }
+  
+  const task = {
+    en: document.getElementById("selEn").value === "true",
+    h: parseInt(document.getElementById("selH").value),
+    m: parseInt(document.getElementById("selM").value),
+    id: parseInt(document.getElementById("selID").value),
+    cmd: document.getElementById("selCmd").value
+  };
+  
+  scheduleData.push(task);
+  renderSchedule();
+}
+
+function removeSchedule(index) {
+  scheduleData.splice(index, 1);
+  renderSchedule();
+}
+
+function renderSchedule() {
+  const list = document.getElementById("scheduleList");
+  if (scheduleData.length === 0) {
+    list.innerHTML = '<div style="color:#999; font-size:12px; margin:10px;">目前尚無設定</div>';
+    return;
+  }
+  
+  list.innerHTML = "";
+  scheduleData.forEach((item, index) => {
+    const row = document.createElement("div");
+    row.className = "schedule-row";
+    const timeStr = `${item.h < 10 ? '0' + item.h : item.h}:${item.m < 10 ? '0' + item.m : item.m}`;
+    const devName = DEVICE_NAMES[item.id - 1];
+    const statusStr = item.en ? "✅" : "⚪";
+    row.innerHTML = `
+      <span>${statusStr} ${timeStr} - ${devName} (${item.cmd})</span>
+      <button class="del-btn" onclick="removeSchedule(${index})">✕</button>
+    `;
+    list.appendChild(row);
+  });
+}
+
+function syncToDevice() {
+  if (!client.connected) { alert("MQTT 未連線，無法同步"); return; }
+  
+  // 將資料轉為 JSON 字串發送
+  const jsonStr = JSON.stringify(scheduleData);
+  client.publish("jam1liau2/schedule/set", jsonStr, { qos: 1 });
+  alert("設定已同步到設備！");
+}
+
+/* ===== 語音控制 (保持原樣) ===== */
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 if (SpeechRecognition) {
   const recognition = new SpeechRecognition();
   recognition.lang = "zh-TW";
   recognition.interimResults = true;
-
-  recognition.onstart = () => {
-    document.getElementById("voiceText").innerText = "🎧 聆聽中...";
-  };
-
+  recognition.onstart = () => { document.getElementById("voiceText").innerText = "🎧 聆聽中..."; };
   recognition.onresult = (e) => {
     const text = e.results[0][0].transcript;
     document.getElementById("voiceText").innerText = text;
     handleVoice(text);
   };
-
-  recognition.onend = () => {
-    setTimeout(() => document.getElementById("voiceText").innerText = "請說指令…", 2000);
-  };
-
+  recognition.onend = () => { setTimeout(() => document.getElementById("voiceText").innerText = "請說指令…", 2000); };
   document.getElementById("micBtn").onclick = () => recognition.start();
 }
 
 function handleVoice(text) {
-  const isOn  = /開|打開|開啟/.test(text);
+  const isOn = /開|打開|開啟/.test(text);
   const isOff = /關|關閉/.test(text);
   if (!isOn && !isOff) return;
-
   let id = null;
-  DEVICE_NAMES.forEach((name, i) => {
-    if (text.includes(name)) id = i + 1;
-  });
-
+  DEVICE_NAMES.forEach((name, i) => { if (text.includes(name)) id = i + 1; });
   const m = text.match(/第?\s*(\d+)/);
   if (!id && m) id = parseInt(m[1]);
-
   if (id >= 1 && id <= 9) {
-    // 修改方式 A (直接判斷 isOn)
-
     client.publish(`jam1liau2/sw${id}/set`, (isOn ? "ON" : "OFF"), { qos: 1, retain: true });
   }
 }
