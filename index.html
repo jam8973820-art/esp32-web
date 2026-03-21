@@ -2,43 +2,53 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>ESP32-S3 家電控制</title>
+<title>ESP32-S3 控制面板</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <style>
-body { font-family: sans-serif; background: #f0f2f5; text-align: center; margin: 0; padding-bottom: 80px; }
-h3 { margin: 10px 0; font-size: 16px; color: #333; }
-#status { font-size: 12px; color: #888; margin: 5px; }
+  body { font-family: sans-serif; background: #f0f2f5; text-align: center; margin: 0; padding-bottom: 80px; }
+  h3 { margin: 10px 0; font-size: 16px; color: #333; }
+  #status { font-size: 11px; color: #888; margin-bottom: 8px; }
 
-/* 實時按鈕區 */
-.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 400px; margin: auto; padding: 0 10px; }
-.device-btn { height: 60px; font-size: 15px; border-radius: 8px; border: none; background: #bbb; color: white; cursor: pointer; }
-.device-btn.on { background: #2ecc71; }
+  /* 實時控制按鈕 */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-width: 420px; margin: auto; padding: 0 10px; }
+  .device-btn { height: 55px; font-size: 14px; border-radius: 8px; border: none; background: #bbb; color: white; cursor: pointer; line-height: 1.2; }
+  .device-btn.on { background: #2ecc71; box-shadow: 0 2px 4px rgba(46,204,113,0.3); }
 
-/* 任務選擇 1-10 */
-.task-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; max-width: 400px; margin: 10px auto; padding: 0 10px; }
-.task-sel-btn { padding: 8px 0; border-radius: 5px; border: 1px solid #ccc; background: #fff; cursor: pointer; font-size: 14px; }
-.task-sel-btn.active { background: #2ecc71; color: white; border-color: #27ae60; font-weight: bold; }
-.task-sel-btn.editing { background: #4285f4; color: white; border-color: #3367d6; box-shadow: inset 0 0 5px rgba(0,0,0,0.2); }
+  /* 任務選擇 1-10 */
+  .task-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; max-width: 420px; margin: 15px auto; padding: 0 10px; }
+  .task-sel-btn { padding: 8px 0; border-radius: 5px; border: 1px solid #ccc; background: #fff; cursor: pointer; font-size: 14px; transition: 0.2s; }
+  .task-sel-btn.active { background: #2ecc71; color: white; border-color: #27ae60; font-weight: bold; }
+  .task-sel-btn.editing { background: #4285f4; color: white; border-color: #3367d6; box-shadow: inset 0 0 5px rgba(0,0,0,0.2); }
 
-/* 橫向編輯區 */
-.edit-box { 
-  max-width: 380px; margin: 10px auto; background: #fff; padding: 12px; 
-  border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: none; 
-}
-.edit-header { font-weight: bold; color: #4285f4; margin-bottom: 10px; font-size: 14px; text-align: left; }
-.flex-row { display: flex; justify-content: space-between; gap: 4px; }
-.input-group { flex: 1; display: flex; flex-direction: column; align-items: center; }
-.input-group label { font-size: 11px; color: #777; margin-bottom: 3px; }
-select { width: 100%; padding: 5px 2px; font-size: 14px; border-radius: 4px; border: 1px solid #ddd; }
+  /* 橫向編輯區 - 比例調整重點 */
+  .edit-box { 
+    max-width: 400px; margin: 10px auto; background: #fff; padding: 12px; 
+    border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: none; 
+  }
+  .edit-header { font-weight: bold; color: #4285f4; margin-bottom: 12px; font-size: 14px; text-align: left; border-left: 4px solid #4285f4; padding-left: 8px; }
+  
+  .flex-row { display: flex; justify-content: space-between; gap: 4px; align-items: flex-end; }
+  
+  /* 欄位寬度控制 */
+  .col-state { flex: 0 0 55px; } /* 固定較窄寬度 */
+  .col-time  { flex: 0 0 105px; } /* 加寬時間區域 */
+  .col-dev   { flex: 1; min-width: 80px; } /* 彈性填滿剩餘空間 */
+  .col-cmd   { flex: 0 0 55px; } /* 固定較窄寬度 */
 
-.save-btn { 
-  margin-top: 12px; width: 100%; padding: 10px; background: #e67e22; 
-  color: white; border: none; border-radius: 5px; font-size: 15px; font-weight: bold; cursor: pointer; 
-}
+  .input-group label { display: block; font-size: 11px; color: #888; margin-bottom: 4px; text-align: center; }
+  select { width: 100%; padding: 6px 0; font-size: 14px; border-radius: 4px; border: 1px solid #ddd; text-align: center; }
+  
+  .time-selects { display: flex; gap: 2px; align-items: center; }
+  .time-selects select { flex: 1; }
 
-#micBtn { margin-top: 15px; padding: 8px 20px; border-radius: 20px; background: #4285f4; color: white; border: none; }
-#voiceArea { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #ddd; padding: 8px; }
+  .save-btn { 
+    margin-top: 15px; width: 100%; padding: 12px; background: #e67e22; 
+    color: white; border: none; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; 
+  }
+
+  #micBtn { margin-top: 10px; padding: 10px 25px; border-radius: 20px; background: #4285f4; color: white; border: none; font-size: 14px; }
+  #voiceArea { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #ddd; padding: 8px; box-shadow: 0 -2px 5px rgba(0,0,0,0.05); }
 </style>
 </head>
 
@@ -54,30 +64,33 @@ select { width: 100%; padding: 5px 2px; font-size: 14px; border-radius: 4px; bor
 <div class="edit-box" id="editor">
   <div class="edit-header" id="editLabel">編輯任務 #1</div>
   <div class="flex-row">
-    <div class="input-group">
-      <label>開關</label>
-      <select id="edEn"><option value="true">啟用</option><option value="false">停用</option></select>
+    <div class="input-group col-state">
+      <label>啟用</label>
+      <select id="edEn"><option value="true">是</option><option value="false">否</option></select>
     </div>
-    <div class="input-group">
-      <label>時間</label>
-      <div style="display:flex; width:100%;">
-        <select id="edH"></select><select id="edM"></select>
+    
+    <div class="input-group col-time">
+      <label>觸發時間</label>
+      <div class="time-selects">
+        <select id="edH"></select>:<select id="edM"></select>
       </div>
     </div>
-    <div class="input-group" style="flex: 1.5;">
-      <label>裝置</label>
+    
+    <div class="input-group col-dev">
+      <label>控制裝置</label>
       <select id="edID"></select>
     </div>
-    <div class="input-group">
+    
+    <div class="input-group col-cmd">
       <label>動作</label>
-      <select id="edCmd"><option value="ON">開啟</option><option value="OFF">關閉</option></select>
+      <select id="edCmd"><option value="ON">開</option><option value="OFF">關</option></select>
     </div>
   </div>
-  <button class="save-btn" onclick="applyChange()">儲存並同步</button>
+  <button class="save-btn" onclick="applyChange()">💾 儲存並同步到設備</button>
 </div>
 
-<button id="micBtn">🎤 語音</button>
-<div id="voiceArea"><div id="voiceText" style="font-size:14px;">等待指令...</div></div>
+<button id="micBtn">🎤 語音控制</button>
+<div id="voiceArea"><div id="voiceText" style="font-size:14px; color:#555;">等待指令...</div></div>
 
 <script>
 const DEVS = ["房間電燈", "戶外電燈", "客廳電燈", "客廳風扇", "設備5", "設備6", "設備7", "設備8", "設備9"];
@@ -88,19 +101,18 @@ let scheds = Array.from({ length: 10 }, () => ({ en: false, h: 0, m: 0, id: 1, c
 let editIdx = -1;
 const swState = {};
 
-// 初始化選單
 function init() {
   const h = document.getElementById("edH"), m = document.getElementById("edM"), id = document.getElementById("edID");
   for (let i=0; i<24; i++) h.add(new Option(i<10?"0"+i:i, i));
   for (let i=0; i<60; i++) m.add(new Option(i<10?"0"+i:i, i));
   DEVS.forEach((n, i) => id.add(new Option(n, i+1)));
   
-  // 生成 RELAY 按鈕
   const rg = document.getElementById("relayGroup");
   DEVS.forEach((n, i) => {
     const btn = document.createElement("button");
     btn.id = "sw" + (i+1); btn.className = "device-btn";
-    btn.innerText = n; btn.onclick = () => {
+    btn.innerText = n + "\n(關)"; 
+    btn.onclick = () => {
       client.publish(`jam1liau2/sw${i+1}/set`, swState[i+1]?"OFF":"ON", {retain:true});
     };
     rg.appendChild(btn);
@@ -142,7 +154,7 @@ function applyChange() {
   };
   client.publish("jam1liau2/schedule/set", JSON.stringify(scheds), {qos:1});
   renderTasks();
-  alert("已儲存同步");
+  alert("已成功儲存同步！");
 }
 
 client.on("connect", () => {
@@ -160,11 +172,14 @@ client.on("message", (t, m) => {
     const b = document.getElementById("sw"+id);
     if(b) {
       b.classList.toggle("on", swState[id]);
-      b.innerText = DEVS[id-1] + (swState[id]?"(開)":"(關)");
+      b.innerText = DEVS[id-1] + (swState[id]?"\n(開)":"\n(關)");
     }
   }
   if(t === "jam1liau2/schedule/status") {
-    scheds = JSON.parse(msg); renderTasks();
+    try {
+      const data = JSON.parse(msg);
+      if(Array.isArray(data)) { scheds = data; renderTasks(); }
+    } catch(e) {}
   }
 });
 
