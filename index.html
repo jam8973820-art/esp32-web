@@ -169,39 +169,10 @@ const deviceState = {};
 const scheduleData = [];
 const buttonsDiv = document.getElementById("buttons");
 
-/* 初始化選單內容 - 已修改：預設為目前時間 */
-function initSelects() {
-  const selH = document.getElementById("selH");
-  const selM = document.getElementById("selM");
-  const selID = document.getElementById("selID");
-
-  // 取得當前本地時間
-  const now = new Date();
-  const currentHour = now.getHours();
-  const currentMin = now.getMinutes();
-
-  // 生成小時 (0-23)，並設定預設值
-  for (let i = 0; i < 24; i++) {
-    const opt = new Option(i < 10 ? "0"+i : i, i);
-    if (i === currentHour) opt.selected = true;
-    selH.add(opt);
-  }
-
-  // 生成分鐘 (0-59)，並設定預設值 (最接近的當前分鐘)
-  for (let i = 0; i < 60; i++) {
-    const opt = new Option(i < 10 ? "0"+i : i, i);
-    if (i === currentMin) opt.selected = true;
-    selM.add(opt);
-  }
-
-  DEVICE_NAMES.forEach((name, i) => selID.add(new Option(name, i + 1)));
-}
-initSelects();
-
-/* 建立按鈕 */
+/* 1. 初始化按鈕 (確保畫面一開始就有按鈕) */
 DEVICE_NAMES.forEach((name, i) => {
   const id = i + 1;
-  deviceState[id] = false;
+  deviceState[id] = false; // 預設關閉
   const btn = document.createElement("button");
   btn.id = "btn" + id;
   btn.className = "device-btn";
@@ -210,6 +181,28 @@ DEVICE_NAMES.forEach((name, i) => {
   buttonsDiv.appendChild(btn);
 });
 
+/* 2. 初始化時間與 ID 選單 (預設目前時間) */
+function initSelects() {
+  const selH = document.getElementById("selH");
+  const selM = document.getElementById("selM");
+  const selID = document.getElementById("selID");
+  const now = new Date();
+
+  for (let i = 0; i < 24; i++) {
+    const opt = new Option(i < 10 ? "0"+i : i, i);
+    if (i === now.getHours()) opt.selected = true;
+    selH.add(opt);
+  }
+  for (let i = 0; i < 60; i++) {
+    const opt = new Option(i < 10 ? "0"+i : i, i);
+    if (i === now.getMinutes()) opt.selected = true;
+    selM.add(opt);
+  }
+  DEVICE_NAMES.forEach((name, i) => selID.add(new Option(name, i + 1)));
+}
+initSelects();
+
+/* 3. MQTT 連線與監聽 */
 const client = mqtt.connect(BROKER, {
   username: USERNAME,
   password: PASSWORD,
@@ -219,7 +212,9 @@ const client = mqtt.connect(BROKER, {
 
 client.on("connect", () => {
   document.getElementById("status").innerText = "MQTT 已連線";
-  for (let i = 1; i <= 9; i++) client.subscribe(`jam1liau2/sw${i}/state`);
+  for (let i = 1; i <= 9; i++) {
+    client.subscribe(`jam1liau2/sw${i}/state`);
+  }
 });
 
 client.on("message", (topic, message) => {
@@ -228,7 +223,7 @@ client.on("message", (topic, message) => {
   if (swMatch) {
     const id = parseInt(swMatch[1]);
     deviceState[id] = (text.toUpperCase() === "ON");
-    updateButton(id);
+    updateButton(id); // 收到 MQTT 訊息後更新按鈕顯示
   }
 });
 
@@ -241,8 +236,13 @@ function updateButton(id) {
   const btn = document.getElementById("btn" + id);
   if (!btn) return;
   const name = DEVICE_NAMES[id - 1];
-  btn.classList.toggle("on", deviceState[id]);
-  btn.innerText = `${name}（${deviceState[id] ? "開" : "關"}）`;
+  if (deviceState[id]) {
+    btn.classList.add("on");
+    btn.innerText = `${name}（開）`;
+  } else {
+    btn.classList.remove("on");
+    btn.innerText = `${name}（關）`;
+  }
 }
 
 /* ===== 定時任務邏輯 ===== */
@@ -256,65 +256,3 @@ function addSchedule() {
     cmd: document.getElementById("selCmd").value
   });
   renderSchedule();
-}
-
-function removeSchedule(index) {
-  scheduleData.splice(index, 1);
-  renderSchedule();
-}
-
-function renderSchedule() {
-  const list = document.getElementById("scheduleList");
-  if (scheduleData.length === 0) {
-    list.innerHTML = '<div style="color:#999; font-size:12px; margin:10px;">目前尚無設定</div>';
-    return;
-  }
-  list.innerHTML = "";
-  scheduleData.forEach((item, index) => {
-    const row = document.createElement("div");
-    row.className = "schedule-row";
-    const timeStr = `${item.h < 10 ? '0' + item.h : item.h}:${item.m < 10 ? '0' + item.m : item.m}`;
-    row.innerHTML = `
-      <span>${item.en ? "✅" : "⚪"} ${timeStr} - ${DEVICE_NAMES[item.id - 1]} (${item.cmd})</span>
-      <button class="del-btn" onclick="removeSchedule(${index})">✕</button>
-    `;
-    list.appendChild(row);
-  });
-}
-
-function syncToDevice() {
-  if (!client.connected) { alert("MQTT 未連線"); return; }
-  client.publish("jam1liau2/schedule/set", JSON.stringify(scheduleData), { qos: 1 });
-  alert("設定已同步！");
-}
-
-/* ===== 語音控制 (保持原樣) ===== */
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (SpeechRecognition) {
-  const recognition = new SpeechRecognition();
-  recognition.lang = "zh-TW";
-  recognition.interimResults = true;
-  recognition.onstart = () => { document.getElementById("voiceText").innerText = "🎧 聆聽中..."; };
-  recognition.onresult = (e) => {
-    const text = e.results[0][0].transcript;
-    document.getElementById("voiceText").innerText = text;
-    handleVoice(text);
-  };
-  recognition.onend = () => { setTimeout(() => document.getElementById("voiceText").innerText = "請說指令…", 2000); };
-  document.getElementById("micBtn").onclick = () => recognition.start();
-}
-
-function handleVoice(text) {
-  const isOn = /開|打開|開啟/.test(text);
-  const isOff = /關|關閉/.test(text);
-  if (!isOn && !isOff) return;
-  let id = null;
-  DEVICE_NAMES.forEach((name, i) => { if (text.includes(name)) id = i + 1; });
-  const m = text.match(/第?\s*(\d+)/);
-  if (!id && m) id = parseInt(m[1]);
-  if (id >= 1 && id <= 9) client.publish(`jam1liau2/sw${id}/set`, (isOn ? "ON" : "OFF"), { qos: 1, retain: true });
-}
-</script>
-
-</body>
-</html>
