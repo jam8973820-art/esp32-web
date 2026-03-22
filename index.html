@@ -6,52 +6,40 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <style>
-  body { font-family: sans-serif; background: #f0f2f5; text-align: center; margin: 0; padding-bottom: 100px; }
-  h3 { margin: 10px 0; font-size: 18px; color: #333; }
-  #status { font-size: 12px; color: #888; margin-bottom: 10px; }
+body { font-family: sans-serif; background: #f0f2f5; text-align: center; margin: 0; padding-bottom: 100px; }
+h3 { margin: 10px 0; font-size: 18px; color: #333; }
+#status { font-size: 12px; color: #888; margin-bottom: 10px; }
 
-  /* 實時按鈕 */
-  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 420px; margin: auto; padding: 0 10px; }
-  .device-btn { height: 60px; font-size: 14px; border-radius: 8px; border: none; background: #bbb; color: white; cursor: pointer; transition: 0.3s; line-height: 1.2; }
-  .device-btn.on { background: #2ecc71; box-shadow: 0 2px 4px rgba(46,204,113,0.3); }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 420px; margin: auto; padding: 0 10px; }
+.device-btn { height: 60px; font-size: 14px; border-radius: 8px; border: none; background: #bbb; color: white; cursor: pointer; transition: 0.3s; line-height: 1.2; }
+.device-btn.on { background: #2ecc71; box-shadow: 0 2px 4px rgba(46,204,113,0.3); }
 
-  /* 任務選擇 */
-  .task-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 420px; margin: 20px auto; padding: 0 10px; }
-  .task-sel-btn { padding: 10px 0; border-radius: 6px; border: 1px solid #ccc; background: #fff; cursor: pointer; font-size: 14px; }
-  .task-sel-btn.active { background: #2ecc71; color: white; border-color: #27ae60; font-weight: bold; }
-  .task-sel-btn.editing { background: #4285f4; color: white; border-color: #3367d6; box-shadow: 0 0 8px rgba(66,133,244,0.5); }
+.task-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 420px; margin: 20px auto; padding: 0 10px; }
+.task-sel-btn { padding: 10px 0; border-radius: 6px; border: 1px solid #ccc; background: #fff; cursor: pointer; font-size: 14px; }
+.task-sel-btn.active { background: #2ecc71; color: white; border-color: #27ae60; font-weight: bold; }
+.task-sel-btn.editing { background: #4285f4; color: white; border-color: #3367d6; box-shadow: 0 0 8px rgba(66,133,244,0.5); }
 
-  /* 編輯區 */
-  .edit-box { 
-    max-width: 400px; margin: 15px auto; background: #fff; padding: 15px; 
-    border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: none; 
-  }
-  .edit-header { font-weight: bold; color: #4285f4; margin-bottom: 15px; font-size: 15px; text-align: left; border-left: 5px solid #4285f4; padding-left: 10px; }
-  .flex-row { display: flex; justify-content: space-between; gap: 8px; align-items: flex-end; }
-  .input-group { flex: 1; text-align: left; }
-  .input-group label { display: block; font-size: 11px; color: #888; margin-bottom: 4px; }
-  select { width: 100%; padding: 8px 2px; font-size: 14px; border-radius: 4px; border: 1px solid #ddd; }
+.edit-box { max-width: 400px; margin: 15px auto; background: #fff; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: none; }
+.edit-header { font-weight: bold; color: #4285f4; margin-bottom: 15px; font-size: 15px; text-align: left; border-left: 5px solid #4285f4; padding-left: 10px; }
+.flex-row { display: flex; justify-content: space-between; gap: 8px; align-items: flex-end; }
+.input-group { flex: 1; text-align: left; }
+.input-group label { display: block; font-size: 11px; color: #888; margin-bottom: 4px; }
+select { width: 100%; padding: 8px 2px; font-size: 14px; border-radius: 4px; border: 1px solid #ddd; }
 
-  .save-btn { 
-    margin-top: 20px; width: 100%; padding: 14px; background: #e67e22; 
-    color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; 
-  }
+.save-btn { margin-top: 20px; width: 100%; padding: 14px; background: #e67e22; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
 
-  /* 語音控制區塊 */
-  #micBtn { margin-top: 20px; padding: 12px 30px; border-radius: 25px; background: #4285f4; color: white; border: none; font-size: 15px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
-  #micBtn.recording { background: #ea4335; animation: pulse 1.5s infinite; }
-  @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
-  #voiceArea { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #ddd; padding: 12px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); }
+#micBtn { margin-top: 20px; padding: 12px 30px; border-radius: 25px; background: #4285f4; color: white; border: none; font-size: 15px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+#micBtn.recording { background: #ea4335; animation: pulse 1.5s infinite; }
+@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+#voiceArea { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #ddd; padding: 12px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); }
 </style>
 </head>
-
 <body>
 
 <h3>ESP32-S3 控制面板</h3>
 <div id="status">MQTT 連線中...</div>
 
 <div class="grid" id="relayGroup"></div>
-
 <div class="task-grid" id="taskGroup"></div>
 
 <div class="edit-box" id="editor">
@@ -84,141 +72,107 @@
 </div>
 
 <script>
-const DEVS = ["房間電燈", "戶外電燈", "客廳電燈", "客廳風扇", "設備5", "設備6", "設備7", "設備8", "設備9"];
+const DEVS = ["房間電燈","戶外電燈","客廳電燈","客廳風扇","設備5","設備6","設備7","設備8","設備9"];
 const BROKER = "wss://yb01715d.ala.asia-southeast1.emqxsl.com:8084/mqtt";
-const client = mqtt.connect(BROKER, { username: "jyhon", password: "jyhon", clientId: "web_"+Math.random().toString(16).substr(2,6) });
+const client = mqtt.connect(BROKER,{username:"jyhon",password:"jyhon",clientId:"web_"+Math.random().toString(16).substr(2,6)});
 
-let scheds = Array.from({ length: 10 }, () => ({ h: 0, m: 0, id: 0 }));
+let scheds = Array.from({length:10},()=>({h:0,m:0,id:0}));
 let editIdx = -1;
 const swState = {};
 
-function init() {
+function init(){
   const h = document.getElementById("edH"), m = document.getElementById("edM"), dev = document.getElementById("edDev");
-  for (let i=0; i<24; i++) h.add(new Option(i<10?"0"+i:i, i));
-  for (let i=0; i<60; i++) m.add(new Option(i<10?"0"+i:i, i));
-  
-  dev.add(new Option("-- 停用 --", 0));
-  DEVS.forEach((n, i) => dev.add(new Option(n, i+1)));
-  
+  for(let i=0;i<24;i++) h.add(new Option(i<10?"0"+i:i,i));
+  for(let i=0;i<60;i++) m.add(new Option(i<10?"0"+i:i,i));
+  dev.add(new Option("-- 停用 --",0));
+  DEVS.forEach((n,i)=>dev.add(new Option(n,i+1)));
+
   const rg = document.getElementById("relayGroup");
-  DEVS.forEach((n, i) => {
+  DEVS.forEach((n,i)=>{
     const btn = document.createElement("button");
-    btn.id = "sw" + (i+1); btn.className = "device-btn";
-    btn.innerText = n + "\n(關)"; 
-    btn.onclick = () => {
-      client.publish(`jam1liau2/sw${i+1}/set`, swState[i+1]?"OFF":"ON", {retain:true});
-    };
+    btn.id = "sw"+(i+1); btn.className="device-btn"; btn.innerText=n+"\n(關)";
+    btn.onclick = ()=>{ client.publish(`jam1liau2/sw${i+1}/set`, swState[i+1]?"OFF":"ON",{retain:true}); };
     rg.appendChild(btn);
   });
+
   renderTasks();
   initVoice();
 }
 
-function renderTasks() {
-  const tg = document.getElementById("taskGroup");
-  tg.innerHTML = "";
-  scheds.forEach((s, i) => {
+function renderTasks(){
+  const tg = document.getElementById("taskGroup"); tg.innerHTML="";
+  scheds.forEach((s,i)=>{
     const btn = document.createElement("button");
-    btn.className = "task-sel-btn" + (s.id > 0 ? " active" : "");
-    if(editIdx === i) btn.classList.add("editing");
-    btn.innerText = i + 1;
-    btn.onclick = () => {
-      editIdx = i;
-      document.getElementById("editor").style.display = "block";
-      document.getElementById("editLabel").innerText = "編輯任務 #" + (i+1);
-      document.getElementById("edH").value = s.h;
-      document.getElementById("edM").value = s.m;
-      if (s.id === 0) {
-          document.getElementById("edDev").value = 0;
-          document.getElementById("edCmd").value = 1;
-      } else {
-          document.getElementById("edDev").value = Math.floor(s.id / 10);
-          document.getElementById("edCmd").value = s.id % 10;
-      }
+    btn.className="task-sel-btn"+(s.id>0?" active":"");
+    if(editIdx===i) btn.classList.add("editing");
+    btn.innerText=i+1;
+    btn.onclick=()=>{
+      editIdx=i;
+      document.getElementById("editor").style.display="block";
+      document.getElementById("editLabel").innerText="編輯任務 #"+(i+1);
+      document.getElementById("edH").value=s.h;
+      document.getElementById("edM").value=s.m;
+      document.getElementById("edDev").value=(s.id===0?0:Math.floor(s.id/10));
+      document.getElementById("edCmd").value=(s.id===0?1:s.id%10);
       renderTasks();
     };
     tg.appendChild(btn);
   });
 }
 
-function applyChange() {
-  if(editIdx === -1) return;
+function applyChange(){
+  if(editIdx===-1) return;
   const devVal = parseInt(document.getElementById("edDev").value);
   const cmdVal = parseInt(document.getElementById("edCmd").value);
-  const finalId = devVal === 0 ? 0 : (devVal * 10 + cmdVal);
-
-  const payload = {
-    h: parseInt(document.getElementById("edH").value),
-    m: parseInt(document.getElementById("edM").value),
-    id: finalId
-  };
-
-  client.publish("jam1liau2/timer/set", JSON.stringify(payload), { qos: 1 });
-  scheds[editIdx] = payload;
+  const finalId = devVal===0?0:(devVal*10+cmdVal);
+  const payload={h:parseInt(document.getElementById("edH").value), m:parseInt(document.getElementById("edM").value), id:finalId};
+  client.publish("jam1liau2/timer/set", JSON.stringify(payload), {qos:1});
+  scheds[editIdx]=payload;
   renderTasks();
   alert("定時指令已成功儲存同步！");
 }
 
-// 語音辨識邏輯 (完整保留)
-function initVoice() {
-    const micBtn = document.getElementById('micBtn');
-    const voiceText = document.getElementById('voiceText');
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-        voiceText.innerText = "瀏覽器不支援語音辨識";
-        return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'zh-TW';
-
-    micBtn.onclick = () => {
-        recognition.start();
-        micBtn.classList.add('recording');
-        voiceText.innerText = "聆聽中...";
-    };
-
-    recognition.onresult = (event) => {
-        const result = event.results[0][0].transcript;
-        voiceText.innerText = "辨識結果：" + result;
-        micBtn.classList.remove('recording');
-
-        DEVS.forEach((name, index) => {
-            if (result.includes(name)) {
-                const swNum = index + 1;
-                if (result.includes("開啟") || result.includes("打開") || result.includes("亮")) {
-                    client.publish(`jam1liau2/sw${swNum}/set`, "ON");
-                } else if (result.includes("關閉") || result.includes("關掉") || result.includes("熄")) {
-                    client.publish(`jam1liau2/sw${swNum}/set`, "OFF");
-                }
-            }
-        });
-    };
-
-    recognition.onerror = () => {
-        micBtn.classList.remove('recording');
-        voiceText.innerText = "辨識失敗，請再試一次";
-    };
-
-    recognition.onend = () => { micBtn.classList.remove('recording'); };
+// 語音控制
+function initVoice(){
+  const micBtn = document.getElementById('micBtn');
+  const voiceText = document.getElementById('voiceText');
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SpeechRecognition){ voiceText.innerText="瀏覽器不支援語音辨識"; return; }
+  const recognition = new SpeechRecognition(); recognition.lang='zh-TW';
+  micBtn.onclick=()=>{ recognition.start(); micBtn.classList.add('recording'); voiceText.innerText="聆聽中..."; };
+  recognition.onresult=(event)=>{
+    const result = event.results[0][0].transcript;
+    voiceText.innerText="辨識結果："+result;
+    micBtn.classList.remove('recording');
+    DEVS.forEach((name,index)=>{
+      if(result.includes(name)){
+        const swNum=index+1;
+        if(result.includes("開啟")||result.includes("打開")||result.includes("亮")) client.publish(`jam1liau2/sw${swNum}/set`,"ON");
+        else if(result.includes("關閉")||result.includes("關掉")||result.includes("熄")) client.publish(`jam1liau2/sw${swNum}/set`,"OFF");
+      }
+    });
+  };
+  recognition.onerror=()=>{ micBtn.classList.remove('recording'); voiceText.innerText="辨識失敗，請再試一次"; };
+  recognition.onend=()=>{ micBtn.classList.remove('recording'); };
 }
 
-client.on("connect", () => {
-  document.getElementById("status").innerText = "MQTT 已連線";
-  for (let i=1; i<=9; i++) client.subscribe(`jam1liau2/sw${i}/state`);
+// MQTT
+client.on("connect",()=>{
+  document.getElementById("status").innerText="MQTT 已連線";
+  for(let i=1;i<=9;i++) client.subscribe(`jam1liau2/sw${i}/state`);
+  client.subscribe("jam1liau2/timer/all");
 });
 
-client.on("message", (t, m) => {
+client.on("message",(t,m)=>{
   const msg = m.toString();
   const swM = t.match(/sw(\d+)\/state/);
-  if(swM) {
-    const id = swM[1]; swState[id] = (msg === "ON");
-    const b = document.getElementById("sw"+id);
-    if(b) {
-      b.classList.toggle("on", swState[id]);
-      b.innerText = DEVS[id-1] + (swState[id]?"\n(開)":"\n(關)");
-    }
+  if(swM){
+    const id=swM[1]; swState[id]=(msg==="ON");
+    const b=document.getElementById("sw"+id);
+    if(b){ b.classList.toggle("on",swState[id]); b.innerText=DEVS[id-1]+(swState[id]?"\n(開)":"\n(關)"); }
+  }
+  if(t=="jam1liau2/timer/all"){
+    const obj=JSON.parse(msg); if(obj.timers) scheds=obj.timers; renderTasks();
   }
 });
 
