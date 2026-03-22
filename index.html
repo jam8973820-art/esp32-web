@@ -6,34 +6,42 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <style>
-  body { font-family: sans-serif; background: #f0f2f5; text-align: center; margin: 0; padding-bottom: 80px; }
+  body { font-family: sans-serif; background: #f0f2f5; text-align: center; margin: 0; padding-bottom: 100px; }
   h3 { margin: 10px 0; font-size: 18px; color: #333; }
   #status { font-size: 12px; color: #888; margin-bottom: 10px; }
 
+  /* 實時按鈕 */
   .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 420px; margin: auto; padding: 0 10px; }
-  .device-btn { height: 60px; font-size: 14px; border-radius: 8px; border: none; background: #bbb; color: white; cursor: pointer; transition: 0.3s; }
+  .device-btn { height: 60px; font-size: 14px; border-radius: 8px; border: none; background: #bbb; color: white; cursor: pointer; transition: 0.3s; line-height: 1.2; }
   .device-btn.on { background: #2ecc71; box-shadow: 0 2px 4px rgba(46,204,113,0.3); }
 
+  /* 任務選擇 */
   .task-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 420px; margin: 20px auto; padding: 0 10px; }
   .task-sel-btn { padding: 10px 0; border-radius: 6px; border: 1px solid #ccc; background: #fff; cursor: pointer; font-size: 14px; }
   .task-sel-btn.active { background: #2ecc71; color: white; border-color: #27ae60; font-weight: bold; }
   .task-sel-btn.editing { background: #4285f4; color: white; border-color: #3367d6; box-shadow: 0 0 8px rgba(66,133,244,0.5); }
 
+  /* 編輯區 */
   .edit-box { 
     max-width: 400px; margin: 15px auto; background: #fff; padding: 15px; 
     border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: none; 
   }
   .edit-header { font-weight: bold; color: #4285f4; margin-bottom: 15px; font-size: 15px; text-align: left; border-left: 5px solid #4285f4; padding-left: 10px; }
-  
-  .flex-row { display: flex; justify-content: space-between; gap: 10px; align-items: flex-end; }
+  .flex-row { display: flex; justify-content: space-between; gap: 8px; align-items: flex-end; }
   .input-group { flex: 1; text-align: left; }
-  .input-group label { display: block; font-size: 12px; color: #666; margin-bottom: 5px; }
-  select { width: 100%; padding: 8px; font-size: 15px; border-radius: 6px; border: 1px solid #ddd; background: #fafafa; }
+  .input-group label { display: block; font-size: 11px; color: #888; margin-bottom: 4px; }
+  select { width: 100%; padding: 8px 2px; font-size: 14px; border-radius: 4px; border: 1px solid #ddd; }
 
   .save-btn { 
     margin-top: 20px; width: 100%; padding: 14px; background: #e67e22; 
     color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; 
   }
+
+  /* 語音控制區塊 */
+  #micBtn { margin-top: 20px; padding: 12px 30px; border-radius: 25px; background: #4285f4; color: white; border: none; font-size: 15px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+  #micBtn.recording { background: #ea4335; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+  #voiceArea { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #ddd; padding: 12px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); }
 </style>
 </head>
 
@@ -51,16 +59,14 @@
   <div class="flex-row">
     <div class="input-group">
       <label>觸發時間</label>
-      <div style="display:flex; align-items:center; gap:5px;">
+      <div style="display:flex; align-items:center; gap:2px;">
         <select id="edH"></select>:<select id="edM"></select>
       </div>
     </div>
-    
     <div class="input-group">
       <label>控制裝置</label>
       <select id="edDev"></select>
     </div>
-    
     <div class="input-group">
       <label>動作</label>
       <select id="edCmd">
@@ -72,12 +78,16 @@
   <button class="save-btn" onclick="applyChange()">💾 儲存並同步到設備</button>
 </div>
 
+<button id="micBtn">🎤 語音控制</button>
+<div id="voiceArea">
+    <div id="voiceText" style="font-size:14px; color:#555; font-weight: bold;">等待指令... (例如：「開啟房間電燈」)</div>
+</div>
+
 <script>
 const DEVS = ["房間電燈", "戶外電燈", "客廳電燈", "客廳風扇", "設備5", "設備6", "設備7", "設備8", "設備9"];
 const BROKER = "wss://yb01715d.ala.asia-southeast1.emqxsl.com:8084/mqtt";
 const client = mqtt.connect(BROKER, { username: "jyhon", password: "jyhon", clientId: "web_"+Math.random().toString(16).substr(2,6) });
 
-// 初始資料：id=0 代表不啟用
 let scheds = Array.from({ length: 10 }, () => ({ h: 0, m: 0, id: 0 }));
 let editIdx = -1;
 const swState = {};
@@ -87,8 +97,7 @@ function init() {
   for (let i=0; i<24; i++) h.add(new Option(i<10?"0"+i:i, i));
   for (let i=0; i<60; i++) m.add(new Option(i<10?"0"+i:i, i));
   
-  // 裝置選單：第一項為停用
-  dev.add(new Option("-- 停用此任務 --", 0));
+  dev.add(new Option("-- 停用 --", 0));
   DEVS.forEach((n, i) => dev.add(new Option(n, i+1)));
   
   const rg = document.getElementById("relayGroup");
@@ -102,6 +111,7 @@ function init() {
     rg.appendChild(btn);
   });
   renderTasks();
+  initVoice();
 }
 
 function renderTasks() {
@@ -109,7 +119,6 @@ function renderTasks() {
   tg.innerHTML = "";
   scheds.forEach((s, i) => {
     const btn = document.createElement("button");
-    // 如果 id > 0 且有效，顯示綠色 active
     btn.className = "task-sel-btn" + (s.id > 0 ? " active" : "");
     if(editIdx === i) btn.classList.add("editing");
     btn.innerText = i + 1;
@@ -119,8 +128,6 @@ function renderTasks() {
       document.getElementById("editLabel").innerText = "編輯任務 #" + (i+1);
       document.getElementById("edH").value = s.h;
       document.getElementById("edM").value = s.m;
-      
-      // 解析 id：例如 11 代表 裝置1 動作1
       if (s.id === 0) {
           document.getElementById("edDev").value = 0;
           document.getElementById("edCmd").value = 1;
@@ -138,8 +145,6 @@ function applyChange() {
   if(editIdx === -1) return;
   const devVal = parseInt(document.getElementById("edDev").value);
   const cmdVal = parseInt(document.getElementById("edCmd").value);
-  
-  // 合併為二位數 ID：裝置 + 動作 (例如 11, 20)；若裝置為 0 則 ID 為 0
   const finalId = devVal === 0 ? 0 : (devVal * 10 + cmdVal);
 
   const payload = {
@@ -148,17 +153,59 @@ function applyChange() {
     id: finalId
   };
 
-  // 發送到 ESP32 監聽的 Topic
   client.publish("jam1liau2/timer/set", JSON.stringify(payload), { qos: 1 });
-  
-  // 更新本地端顯示
   scheds[editIdx] = payload;
   renderTasks();
-  alert("定時指令已送出！");
+  alert("定時指令已成功儲存同步！");
+}
+
+// 語音辨識邏輯 (完整保留)
+function initVoice() {
+    const micBtn = document.getElementById('micBtn');
+    const voiceText = document.getElementById('voiceText');
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+        voiceText.innerText = "瀏覽器不支援語音辨識";
+        return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'zh-TW';
+
+    micBtn.onclick = () => {
+        recognition.start();
+        micBtn.classList.add('recording');
+        voiceText.innerText = "聆聽中...";
+    };
+
+    recognition.onresult = (event) => {
+        const result = event.results[0][0].transcript;
+        voiceText.innerText = "辨識結果：" + result;
+        micBtn.classList.remove('recording');
+
+        DEVS.forEach((name, index) => {
+            if (result.includes(name)) {
+                const swNum = index + 1;
+                if (result.includes("開啟") || result.includes("打開") || result.includes("亮")) {
+                    client.publish(`jam1liau2/sw${swNum}/set`, "ON");
+                } else if (result.includes("關閉") || result.includes("關掉") || result.includes("熄")) {
+                    client.publish(`jam1liau2/sw${swNum}/set`, "OFF");
+                }
+            }
+        });
+    };
+
+    recognition.onerror = () => {
+        micBtn.classList.remove('recording');
+        voiceText.innerText = "辨識失敗，請再試一次";
+    };
+
+    recognition.onend = () => { micBtn.classList.remove('recording'); };
 }
 
 client.on("connect", () => {
-  document.getElementById("status").innerText = "MQTT 已連線 (Sapido)";
+  document.getElementById("status").innerText = "MQTT 已連線";
   for (let i=1; i<=9; i++) client.subscribe(`jam1liau2/sw${i}/state`);
 });
 
