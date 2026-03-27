@@ -73,7 +73,7 @@ function init() {
       
       // 如果設定了延時且要開啟設備
       if (targetState === "ON" && currentDelayHours > 0) {
-        client.publish("jam1liau2/timer/autoff", JSON.stringify({ id: i+1, delay: currentDelayHours * 3600 }));
+        client.publish("jam1liau2/timer/autoff", JSON.stringify({ id: i+1, delay: currentDelayHours * 60 }));
       }
     };
     rg.appendChild(btn);
