@@ -95,19 +95,29 @@ function init() {
     const btn = document.createElement("button");
     btn.id = "sw" + (i+1); btn.className = "device-btn";
     btn.innerText = n + "\n(關)"; 
+
+// --- 修改後的按鈕點擊邏輯 ---
     btn.onclick = () => {
       const targetState = swState[i+1] ? "OFF" : "ON";
-      client.publish(`jam1liau2/sw${i+1}/set`, targetState, {retain:true});
       const totalSeconds = (selH * 3600) + (selM * 60);
+      
+      // 1. 先發送控制指令
+      client.publish(`jam1liau2/sw${i+1}/set`, targetState, {retain:true});
+      
       if (targetState === "ON" && totalSeconds > 0) {
-        client.publish("jam1liau2/timer/autoff", JSON.stringify({ id: i+1, delay: totalSeconds }));
+        // 2. 發送定時指令與時間記錄
         const offTimeStr = getOffTimeStr(totalSeconds);
-        // 更新並立即同步狀態，解決需要重整的問題
+        client.publish("jam1liau2/timer/autoff", JSON.stringify({ id: i+1, delay: totalSeconds }));
         client.publish(`jam1liau2/sw${i+1}/timer_at`, offTimeStr, {retain:true});
-        updateInfoBtn(i+1, offTimeStr, true);
-        resetToManual();
+        
+        // 3. 延遲 500ms 後再更新介面，確保 MQTT 訊息已抵達 Broker
+        setTimeout(() => {
+          updateInfoBtn(i+1, offTimeStr, true);
+          resetToManual();
+        }, 500); 
       }
     };
+
     rg.appendChild(btn);
 
     const info = document.createElement("div");
