@@ -15,14 +15,14 @@
   .device-btn { height: 55px; font-size: 13px; border-radius: 8px; border: none; background: #bbb; color: white; cursor: pointer; line-height: 1.2; }
   .device-btn.on { background: #2ecc71; box-shadow: 0 2px 4px rgba(46,204,113,0.3); }
 
-  /* 延時設定區 - 極簡化 */
+  /* 延時設定區 */
   .timer-box { max-width: 400px; margin: 10px auto; background: #fff; padding: 8px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
   .timer-header { font-size: 12px; font-weight: bold; color: #e67e22; margin-bottom: 5px; display: flex; justify-content: space-between; }
   .delay-options { display: flex; justify-content: center; gap: 3px; margin-bottom: 5px; flex-wrap: nowrap; overflow-x: auto; }
-  .delay-btn { min-width: 32px; padding: 6px 0; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9; cursor: pointer; font-size: 11px; }
+  .delay-btn { min-width: 30px; padding: 6px 0; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9; cursor: pointer; font-size: 11px; }
   .delay-btn.active { background: #e67e22; color: white; border-color: #d35400; }
 
-  /* 預定關閉顯示 - 僅顯示 active */
+  /* 預定關閉顯示 */
   .info-grid { display: flex; flex-direction: column; gap: 4px; max-width: 400px; margin: 0 auto; }
   .info-btn { display: none; font-size: 11px; padding: 6px; border-radius: 4px; background: #27ae60; color: white; text-align: left; padding-left: 15px; }
   .info-btn.show { display: block; }
@@ -51,6 +51,10 @@
     <button class="delay-btn" onclick="updateTime('h', 3, this)">3</button>
     <button class="delay-btn" onclick="updateTime('h', 4, this)">4</button>
     <button class="delay-btn" onclick="updateTime('h', 5, this)">5</button>
+    <button class="delay-btn" onclick="updateTime('h', 6, this)">6</button>
+    <button class="delay-btn" onclick="updateTime('h', 7, this)">7</button>
+    <button class="delay-btn" onclick="updateTime('h', 8, this)">8</button>
+    <button class="delay-btn" onclick="updateTime('h', 9, this)">9</button>
     <span style="font-size:10px; align-self:center; color:#999">H</span>
   </div>
 
@@ -98,8 +102,9 @@ function init() {
       if (targetState === "ON" && totalSeconds > 0) {
         client.publish("jam1liau2/timer/autoff", JSON.stringify({ id: i+1, delay: totalSeconds }));
         const offTimeStr = getOffTimeStr(totalSeconds);
-        // 將定時時間記錄到 MQTT 供同步
+        // 更新並立即同步狀態，解決需要重整的問題
         client.publish(`jam1liau2/sw${i+1}/timer_at`, offTimeStr, {retain:true});
+        updateInfoBtn(i+1, offTimeStr, true);
         resetToManual();
       }
     };
@@ -132,6 +137,18 @@ function getOffTimeStr(seconds) {
   return offTime.getHours().toString().padStart(2, '0') + ":" + offTime.getMinutes().toString().padStart(2, '0');
 }
 
+function updateInfoBtn(id, timeStr, isShow) {
+  const info = document.getElementById("info" + id);
+  if (info) {
+    if (isShow && timeStr) {
+      info.innerText = `⏳ ${DEVS[id-1]}：預計於 ${timeStr} 關閉`;
+      info.classList.add("show");
+    } else {
+      info.classList.remove("show");
+    }
+  }
+}
+
 function initVoice() {
     const micBtn = document.getElementById('micBtn'), voiceText = document.getElementById('voiceText');
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -148,7 +165,9 @@ function initVoice() {
                     client.publish(`jam1liau2/sw${swNum}/set`, "ON");
                     if (totalSeconds > 0) {
                         client.publish("jam1liau2/timer/autoff", JSON.stringify({ id: swNum, delay: totalSeconds }));
-                        client.publish(`jam1liau2/sw${swNum}/timer_at`, getOffTimeStr(totalSeconds), {retain:true});
+                        const offTimeStr = getOffTimeStr(totalSeconds);
+                        client.publish(`jam1liau2/sw${swNum}/timer_at`, offTimeStr, {retain:true});
+                        updateInfoBtn(swNum, offTimeStr, true);
                         resetToManual();
                     }
                 } else if (result.includes("關閉") || result.includes("關掉") || result.includes("熄")) {
@@ -165,7 +184,7 @@ client.on("connect", () => {
   document.getElementById("status").innerText = "MQTT 已連線";
   for (let i=1; i<=9; i++) {
     client.subscribe(`jam1liau2/sw${i}/state`);
-    client.subscribe(`jam1liau2/sw${i}/timer_at`); // 訂閱同步時間
+    client.subscribe(`jam1liau2/sw${i}/timer_at`);
   }
 });
 
@@ -176,23 +195,18 @@ client.on("message", (t, m) => {
 
   if(swMatch) {
     const id = swMatch[1]; swState[id] = (msg === "ON");
-    const b = document.getElementById("sw"+id), info = document.getElementById("info"+id);
+    const b = document.getElementById("sw"+id);
     if(b) { b.classList.toggle("on", swState[id]); b.innerText = DEVS[id-1] + (swState[id]?"\n(開)":"\n(關)"); }
-    if(!swState[id] && info) { 
-        info.classList.remove("show"); 
-        client.publish(`jam1liau2/sw${id}/timer_at`, "", {retain:true}); // 關掉後清空 MQTT 同步記錄
+    if(!swState[id]) { 
+        updateInfoBtn(id, "", false);
+        client.publish(`jam1liau2/sw${id}/timer_at`, "", {retain:true});
     }
   }
   
   if(timerMatch) {
     const id = timerMatch[1];
-    const info = document.getElementById("info"+id);
-    if(msg && swState[id]) {
-      info.innerText = `⏳ ${DEVS[id-1]}：預計於 ${msg} 關閉`;
-      info.classList.add("show");
-    } else {
-      info.classList.remove("show");
-    }
+    if(msg && swState[id]) { updateInfoBtn(id, msg, true); } 
+    else { updateInfoBtn(id, "", false); }
   }
 });
 init();
