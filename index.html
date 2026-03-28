@@ -88,14 +88,6 @@ const client = mqtt.connect(BROKER, { username: "jyhon", password: "jyhon", clie
 let selH = 0, selM = 0;
 const swState = {};
 
-function getOffTimeStr(seconds) {
-  const offTime = new Date(new Date().getTime() + seconds * 1000);
-  const h = offTime.getHours().toString().padStart(2, '0');
-  const m = offTime.getMinutes().toString().padStart(2, '0');
-  const s = offTime.getSeconds().toString().padStart(2, '0'); // 新增秒數
-  return `${h}:${m}:${s}`;
-}
-
 function init() {
   const rg = document.getElementById("relayGroup");
   const ig = document.getElementById("infoGroup");
@@ -103,27 +95,17 @@ function init() {
     const btn = document.createElement("button");
     btn.id = "sw" + (i+1); btn.className = "device-btn";
     btn.innerText = n + "\n(關)"; 
-
-   // --- 修改後的按鈕點擊邏輯 ---
-   btn.onclick = () => {
+    btn.onclick = () => {
       const targetState = swState[i+1] ? "OFF" : "ON";
       const totalSeconds = (selH * 3600) + (selM * 60);
-      
       client.publish(`jam1liau2/sw${i+1}/set`, targetState, {retain:true});
-      
       if (targetState === "ON" && totalSeconds > 0) {
         const offTimeStr = getOffTimeStr(totalSeconds);
         client.publish("jam1liau2/timer/autoff", JSON.stringify({ id: i+1, delay: totalSeconds }));
         client.publish(`jam1liau2/sw${i+1}/timer_at`, offTimeStr, {retain:true});
-        
-        // 延遲 500ms 確保 MQTT 完成後再更新介面
-        setTimeout(() => {
-          updateInfoBtn(i+1, offTimeStr, true);
-          resetToManual();
-        }, 500); 
+        setTimeout(() => { updateInfoBtn(i+1, offTimeStr, true); resetToManual(); }, 1000);
       }
     };
-
     rg.appendChild(btn);
 
     const info = document.createElement("div");
@@ -148,20 +130,22 @@ function resetToManual() {
   document.querySelectorAll('#minGroup .delay-btn')[0].classList.add('active');
 }
 
+// 修正：現在包含秒數 (HH:mm:ss)
 function getOffTimeStr(seconds) {
   const offTime = new Date(new Date().getTime() + seconds * 1000);
-  return offTime.getHours().toString().padStart(2, '0') + ":" + offTime.getMinutes().toString().padStart(2, '0');
+  const h = offTime.getHours().toString().padStart(2, '0');
+  const m = offTime.getMinutes().toString().padStart(2, '0');
+  const s = offTime.getSeconds().toString().padStart(2, '0');
+  return `${h}:${m}:${s}`;
 }
 
 function updateInfoBtn(id, timeStr, isShow) {
   const info = document.getElementById("info" + id);
   if (info) {
-    if (isShow && timeStr) {
+    if (isShow && timeStr && swState[id]) {
       info.innerText = `⏳ ${DEVS[id-1]}：預計於 ${timeStr} 關閉`;
       info.classList.add("show");
-    } else {
-      info.classList.remove("show");
-    }
+    } else { info.classList.remove("show"); }
   }
 }
 
@@ -180,11 +164,10 @@ function initVoice() {
                 if (result.includes("開啟") || result.includes("打開") || result.includes("亮")) {
                     client.publish(`jam1liau2/sw${swNum}/set`, "ON");
                     if (totalSeconds > 0) {
-                        client.publish("jam1liau2/timer/autoff", JSON.stringify({ id: swNum, delay: totalSeconds }));
                         const offTimeStr = getOffTimeStr(totalSeconds);
+                        client.publish("jam1liau2/timer/autoff", JSON.stringify({ id: swNum, delay: totalSeconds }));
                         client.publish(`jam1liau2/sw${swNum}/timer_at`, offTimeStr, {retain:true});
-                        updateInfoBtn(swNum, offTimeStr, true);
-                        resetToManual();
+                        setTimeout(() => { updateInfoBtn(swNum, offTimeStr, true); resetToManual(); }, 1000);
                     }
                 } else if (result.includes("關閉") || result.includes("關掉") || result.includes("熄")) {
                     client.publish(`jam1liau2/sw${swNum}/set`, "OFF");
@@ -208,7 +191,6 @@ client.on("message", (t, m) => {
   const msg = m.toString();
   const swMatch = t.match(/sw(\d+)\/state/);
   const timerMatch = t.match(/sw(\d+)\/timer_at/);
-
   if(swMatch) {
     const id = swMatch[1]; swState[id] = (msg === "ON");
     const b = document.getElementById("sw"+id);
@@ -218,7 +200,6 @@ client.on("message", (t, m) => {
         client.publish(`jam1liau2/sw${id}/timer_at`, "", {retain:true});
     }
   }
-  
   if(timerMatch) {
     const id = timerMatch[1];
     if(msg && swState[id]) { updateInfoBtn(id, msg, true); } 
