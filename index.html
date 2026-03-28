@@ -88,6 +88,14 @@ const client = mqtt.connect(BROKER, { username: "jyhon", password: "jyhon", clie
 let selH = 0, selM = 0;
 const swState = {};
 
+function getOffTimeStr(seconds) {
+  const offTime = new Date(new Date().getTime() + seconds * 1000);
+  const h = offTime.getHours().toString().padStart(2, '0');
+  const m = offTime.getMinutes().toString().padStart(2, '0');
+  const s = offTime.getSeconds().toString().padStart(2, '0'); // 新增秒數
+  return `${h}:${m}:${s}`;
+}
+
 function init() {
   const rg = document.getElementById("relayGroup");
   const ig = document.getElementById("infoGroup");
@@ -96,21 +104,19 @@ function init() {
     btn.id = "sw" + (i+1); btn.className = "device-btn";
     btn.innerText = n + "\n(關)"; 
 
-// --- 修改後的按鈕點擊邏輯 ---
-    btn.onclick = () => {
+   // --- 修改後的按鈕點擊邏輯 ---
+   btn.onclick = () => {
       const targetState = swState[i+1] ? "OFF" : "ON";
       const totalSeconds = (selH * 3600) + (selM * 60);
       
-      // 1. 先發送控制指令
       client.publish(`jam1liau2/sw${i+1}/set`, targetState, {retain:true});
       
       if (targetState === "ON" && totalSeconds > 0) {
-        // 2. 發送定時指令與時間記錄
         const offTimeStr = getOffTimeStr(totalSeconds);
         client.publish("jam1liau2/timer/autoff", JSON.stringify({ id: i+1, delay: totalSeconds }));
         client.publish(`jam1liau2/sw${i+1}/timer_at`, offTimeStr, {retain:true});
         
-        // 3. 延遲 500ms 後再更新介面，確保 MQTT 訊息已抵達 Broker
+        // 延遲 500ms 確保 MQTT 完成後再更新介面
         setTimeout(() => {
           updateInfoBtn(i+1, offTimeStr, true);
           resetToManual();
