@@ -93,23 +93,25 @@ function init() {
   const ig = document.getElementById("infoGroup");
   DEVS.forEach((n, i) => {
     const btn = document.createElement("button");
-    btn.id = "sw" + (i+1); btn.className = "device-btn";
+    const swNum = (i + 1).toString(); // 強制轉為字串
+    btn.id = "sw" + swNum; btn.className = "device-btn";
     btn.innerText = n + "\n(關)"; 
     btn.onclick = () => {
-      const targetState = swState[i+1] ? "OFF" : "ON";
+      // 修正點：使用字串 swNum 來存取 swState，確保切換邏輯正常
+      const targetState = swState[swNum] ? "OFF" : "ON";
       const totalSeconds = (selH * 3600) + (selM * 60);
-      client.publish(`jam1liau2/sw${i+1}/set`, targetState, {retain:true});
+      client.publish(`jam1liau2/sw${swNum}/set`, targetState, {retain:true});
       if (targetState === "ON" && totalSeconds > 0) {
         const offTimeStr = getOffTimeStr(totalSeconds);
-        client.publish("jam1liau2/timer/autoff", JSON.stringify({ id: i+1, delay: totalSeconds }));
-        client.publish(`jam1liau2/sw${i+1}/timer_at`, offTimeStr, {retain:true});
-        setTimeout(() => { updateInfoBtn(i+1, offTimeStr, true); resetToManual(); }, 1000);
+        client.publish("jam1liau2/timer/autoff", JSON.stringify({ id: parseInt(swNum), delay: totalSeconds }));
+        client.publish(`jam1liau2/sw${swNum}/timer_at`, offTimeStr, {retain:true});
+        setTimeout(() => { updateInfoBtn(swNum, offTimeStr, true); resetToManual(); }, 1000);
       }
     };
     rg.appendChild(btn);
 
     const info = document.createElement("div");
-    info.id = "info" + (i+1); info.className = "info-btn";
+    info.id = "info" + swNum; info.className = "info-btn";
     ig.appendChild(info);
   });
   initVoice();
@@ -142,9 +144,8 @@ function getOffTimeStr(seconds) {
 function updateInfoBtn(id, timeStr, isShow) {
   const info = document.getElementById("info" + id);
   if (info) {
-    // 證據：移除 swState[id] 檢查，確保不論訊息抵達順序為何，只要有定時時間就顯示
     if (isShow && timeStr && timeStr.length > 2) {
-      info.innerText = `⏳ ${DEVS[id-1]}：預計於 ${timeStr} 關閉`;
+      info.innerText = `⏳ ${DEVS[parseInt(id)-1]}：預計於 ${timeStr} 關閉`;
       info.classList.add("show");
     } else { info.classList.remove("show"); }
   }
@@ -161,12 +162,13 @@ function initVoice() {
         voiceText.innerText = "辨識結果：" + result;
         DEVS.forEach((name, index) => {
             if (result.includes(name)) {
-                const swNum = index + 1, totalSeconds = (selH * 3600) + (selM * 60);
+                const swNum = (index + 1).toString();
+                const totalSeconds = (selH * 3600) + (selM * 60);
                 if (result.includes("開啟") || result.includes("打開") || result.includes("亮")) {
                     client.publish(`jam1liau2/sw${swNum}/set`, "ON");
                     if (totalSeconds > 0) {
                         const offTimeStr = getOffTimeStr(totalSeconds);
-                        client.publish("jam1liau2/timer/autoff", JSON.stringify({ id: swNum, delay: totalSeconds }));
+                        client.publish("jam1liau2/timer/autoff", JSON.stringify({ id: parseInt(swNum), delay: totalSeconds }));
                         client.publish(`jam1liau2/sw${swNum}/timer_at`, offTimeStr, {retain:true});
                         setTimeout(() => { updateInfoBtn(swNum, offTimeStr, true); resetToManual(); }, 1000);
                     }
@@ -195,7 +197,10 @@ client.on("message", (t, m) => {
   if(swMatch) {
     const id = swMatch[1]; swState[id] = (msg === "ON");
     const b = document.getElementById("sw"+id);
-    if(b) { b.classList.toggle("on", swState[id]); b.innerText = DEVS[id-1] + (swState[id]?"\n(開)":"\n(關)"); }
+    if(b) { 
+        b.classList.toggle("on", swState[id]); 
+        b.innerText = DEVS[parseInt(id)-1] + (swState[id]?"\n(開)":"\n(關)"); 
+    }
     if(!swState[id]) { 
         updateInfoBtn(id, "", false);
         client.publish(`jam1liau2/sw${id}/timer_at`, "", {retain:true});
@@ -203,7 +208,6 @@ client.on("message", (t, m) => {
   }
   if(timerMatch) {
     const id = timerMatch[1];
-    // 證據：移除對 swState[id] 的強迫依賴，解決 6-9 號訊息被過濾的問題
     if(msg && msg.length > 2) { updateInfoBtn(id, msg, true); } 
     else { updateInfoBtn(id, "", false); }
   }
