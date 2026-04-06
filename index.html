@@ -92,32 +92,34 @@ function init() {
   const rg = document.getElementById("relayGroup");
   const ig = document.getElementById("infoGroup");
   DEVS.forEach((n, i) => {
-    const swId = (i + 1).toString(); // 強制轉為字串 ID
-    swState[swId] = false; // 初始化狀態，防止 undefined 導致切換失效
-
+    const swNum = i + 1; 
     const btn = document.createElement("button");
-    btn.id = "sw" + swId; btn.className = "device-btn";
+    btn.id = "sw" + swNum; btn.className = "device-btn";
     btn.innerText = n + "\n(關)"; 
     
-    btn.onclick = () => {
-      // 修正：使用 swId 閉包變數確保抓到正確的狀態
-      const targetState = swState[swId] ? "OFF" : "ON";
+    btn.onclick = function() {
+      // 核心修正：從按鈕 ID 重新取得編號，確保 1-9 號邏輯完全鎖定
+      const id = this.id.replace("sw", "");
+      const targetState = swState[id] ? "OFF" : "ON";
       const totalSeconds = (selH * 3600) + (selM * 60);
       
-      client.publish(`jam1liau2/sw${swId}/set`, targetState, {retain:true});
+      client.publish(`jam1liau2/sw${id}/set`, targetState, {retain:true});
       
       if (targetState === "ON" && totalSeconds > 0) {
         const offTimeStr = getOffTimeStr(totalSeconds);
-        client.publish("jam1liau2/timer/autoff", JSON.stringify({ id: parseInt(swId), delay: totalSeconds }));
-        client.publish(`jam1liau2/sw${swId}/timer_at`, offTimeStr, {retain:true});
-        setTimeout(() => { updateInfoBtn(swId, offTimeStr, true); resetToManual(); }, 1000);
+        client.publish("jam1liau2/timer/autoff", JSON.stringify({ id: parseInt(id), delay: totalSeconds }));
+        client.publish(`jam1liau2/sw${id}/timer_at`, offTimeStr, {retain:true});
+        setTimeout(() => { updateInfoBtn(id, offTimeStr, true); resetToManual(); }, 1000);
       }
     };
     rg.appendChild(btn);
 
     const info = document.createElement("div");
-    info.id = "info" + swId; info.className = "info-btn";
+    info.id = "info" + swNum; info.className = "info-btn";
     ig.appendChild(info);
+    
+    // 初始化 swState 預設值
+    swState[swNum] = false;
   });
   initVoice();
 }
@@ -149,7 +151,6 @@ function getOffTimeStr(seconds) {
 function updateInfoBtn(id, timeStr, isShow) {
   const info = document.getElementById("info" + id);
   if (info) {
-    // 修正：移除 swState[id] 依賴，確保訊息顯示不被阻斷
     if (isShow && timeStr && timeStr.length > 2) {
       info.innerText = `⏳ ${DEVS[parseInt(id)-1]}：預計於 ${timeStr} 關閉`;
       info.classList.add("show");
@@ -168,13 +169,13 @@ function initVoice() {
         voiceText.innerText = "辨識結果：" + result;
         DEVS.forEach((name, index) => {
             if (result.includes(name)) {
-                const swNum = (index + 1).toString();
+                const swNum = index + 1;
                 const totalSeconds = (selH * 3600) + (selM * 60);
                 if (result.includes("開啟") || result.includes("打開") || result.includes("亮")) {
                     client.publish(`jam1liau2/sw${swNum}/set`, "ON");
                     if (totalSeconds > 0) {
                         const offTimeStr = getOffTimeStr(totalSeconds);
-                        client.publish("jam1liau2/timer/autoff", JSON.stringify({ id: parseInt(swNum), delay: totalSeconds }));
+                        client.publish("jam1liau2/timer/autoff", JSON.stringify({ id: swNum, delay: totalSeconds }));
                         client.publish(`jam1liau2/sw${swNum}/timer_at`, offTimeStr, {retain:true});
                         setTimeout(() => { updateInfoBtn(swNum, offTimeStr, true); resetToManual(); }, 1000);
                     }
