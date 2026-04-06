@@ -89,28 +89,22 @@ function init() {
     btn.innerText = n + "\n(關)"; 
     
     btn.onclick = function() {
-      const id = this.id.replace("sw", ""); 
+  const id = this.id.replace("sw", ""); 
+  const current = swState[id] || false;
+  const targetState = current ? "OFF" : "ON"; // 這裡只決定要送什麼
 
-      // ✅ 修正：先用本地狀態切換（關鍵）
-      const current = swState[id] || false;
-      const targetState = current ? "OFF" : "ON";
-      swState[id] = !current;
-
-      const b = document.getElementById("sw"+id);
-      b.classList.toggle("on", swState[id]);
-      b.innerText = DEVS[parseInt(id)-1] + (swState[id]?"\n(開)":"\n(關)");
-
-      const totalSeconds = (selH * 3600) + (selM * 60);
-      
-      client.publish(`jam1liau2/sw${id}/set`, targetState, {retain:true});
-      
-      if (targetState === "ON" && totalSeconds > 0) {
-        const offTimeStr = getOffTimeStr(totalSeconds);
-        client.publish("jam1liau2/timer/autoff", JSON.stringify({ id: parseInt(id), delay: totalSeconds }));
-        client.publish(`jam1liau2/sw${id}/timer_at`, offTimeStr, {retain:true});
-        setTimeout(() => { updateInfoBtn(id, offTimeStr, true); resetToManual(); }, 1000);
-      }
-    };
+  const totalSeconds = (selH * 3600) + (selM * 60);
+  
+  // 只負責發送，不要在這裡寫 b.classList.toggle
+  client.publish(`jam1liau2/sw${id}/set`, targetState, {retain:true});
+  
+  if (targetState === "ON" && totalSeconds > 0) {
+    const offTimeStr = getOffTimeStr(totalSeconds);
+    client.publish("jam1liau2/timer/autoff", JSON.stringify({ id: parseInt(id), delay: totalSeconds }));
+    client.publish(`jam1liau2/sw${id}/timer_at`, offTimeStr, {retain:true});
+    resetToManual();
+  }
+};
     rg.appendChild(btn);
 
     const info = document.createElement("div");
@@ -183,26 +177,35 @@ client.on("connect", () => {
 });
 
 client.on("message", (t, m) => {
-  const msg = m.toString();
-  const swMatch = t.match(/sw(\d+)\/state/);
-  const timerMatch = t.match(/sw(\d+)\/timer_at/);
-  if(swMatch) {
-    const id = swMatch[1]; 
+  const msg = m.toString().trim();
+  const idMatch = t.match(/sw(\d+)/);
+  if (!idMatch) return;
+  const id = idMatch[1];
+
+  if (t.endsWith("/state")) {
     swState[id] = (msg === "ON");
-    const b = document.getElementById("sw"+id);
-    if(b) { 
-        b.classList.toggle("on", swState[id]); 
-        b.innerText = DEVS[parseInt(id)-1] + (swState[id]?"\n(開)":"\n(關)"); 
-    }
-    if(!swState[id]) { 
+    const b = document.getElementById("sw" + id);
+    if (b) {
+      // 顏色完全根據 ESP8266 回傳的 state 決定
+      if (swState[id]) {
+        b.classList.add("on");
+        b.innerText = DEVS[parseInt(id)-1] + "\n(開)";
+      } else {
+        b.classList.remove("on");
+        b.innerText = DEVS[parseInt(id)-1] + "\n(關)";
+        // 只有在真正關閉時才隱藏資訊
         updateInfoBtn(id, "", false);
-        client.publish(`jam1liau2/sw${id}/timer_at`, "", {retain:true});
+      }
     }
   }
-  if(timerMatch) {
-    const id = timerMatch[1];
-    if(msg && msg.length > 2) { updateInfoBtn(id, msg, true); } 
-    else { updateInfoBtn(id, "", false); }
+
+  if (t.endsWith("/timer_at")) {
+    // 這裡只負責顯示文字，絕對不要去動到 b.classList
+    if (msg && msg.length > 2) {
+      updateInfoBtn(id, msg, true);
+    } else {
+      updateInfoBtn(id, "", false);
+    }
   }
 });
 init();
