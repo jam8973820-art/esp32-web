@@ -9,28 +9,19 @@
   body { font-family: sans-serif; background: #f0f2f5; text-align: center; margin: 0; padding-bottom: 120px; }
   h3 { margin: 8px 0; font-size: 16px; color: #333; }
   #status { font-size: 11px; color: #888; margin-bottom: 5px; }
-
-  /* 實時按鈕 */
   .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-width: 400px; margin: auto; padding: 0 8px; }
   .device-btn { height: 55px; font-size: 13px; border-radius: 8px; border: none; background: #bbb; color: white; cursor: pointer; line-height: 1.2; }
   .device-btn.on { background: #2ecc71; box-shadow: 0 2px 4px rgba(46,204,113,0.3); }
-
-  /* 延時設定區 */
   .timer-box { max-width: 400px; margin: 10px auto; background: #fff; padding: 8px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
   .timer-header { font-size: 12px; font-weight: bold; color: #e67e22; margin-bottom: 5px; display: flex; justify-content: space-between; }
   .delay-options { display: flex; justify-content: center; gap: 3px; margin-bottom: 5px; flex-wrap: nowrap; overflow-x: auto; }
   .delay-btn { min-width: 30px; padding: 6px 0; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9; cursor: pointer; font-size: 11px; }
   .delay-btn.active { background: #e67e22; color: white; border-color: #d35400; }
-
-  /* 預定關閉顯示 */
   .info-grid { display: flex; flex-direction: column; gap: 4px; max-width: 400px; margin: 0 auto; }
   .info-btn { display: none; font-size: 11px; padding: 6px; border-radius: 4px; background: #27ae60; color: white; text-align: left; padding-left: 15px; }
   .info-btn.show { display: block; }
-
-  /* 語音按鈕 */
   #micBtn { margin-top: 10px; padding: 10px 25px; border-radius: 20px; background: #4285f4; color: white; border: none; font-size: 14px; font-weight: bold; cursor: pointer; }
   #micBtn.recording { background: #ea4335; animation: pulse 1.5s infinite; }
-  @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
   #voiceArea { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #ddd; padding: 8px; z-index: 100; }
 </style>
 </head>
@@ -43,7 +34,6 @@
 
 <div class="timer-box">
   <div class="timer-header"><span>⏲️ 設定關閉時間</span><span id="totalDisplay">手動</span></div>
-  
   <div class="delay-options" id="hourGroup">
     <button class="delay-btn active" onclick="updateTime('h', 0, this)">0</button>
     <button class="delay-btn" onclick="updateTime('h', 1, this)">1</button>
@@ -57,7 +47,6 @@
     <button class="delay-btn" onclick="updateTime('h', 9, this)">9</button>
     <span style="font-size:10px; align-self:center; color:#999">H</span>
   </div>
-
   <div class="delay-options" id="minGroup">
     <button class="delay-btn active" onclick="updateTime('m', 0, this)">0</button>
     <button class="delay-btn" onclick="updateTime('m', 1, this)">1</button>
@@ -71,7 +60,6 @@
     <button class="delay-btn" onclick="updateTime('m', 50, this)">50</button>
     <span style="font-size:10px; align-self:center; color:#999">M</span>
   </div>
-
   <div class="info-grid" id="infoGroup"></div>
 </div>
 
@@ -81,7 +69,7 @@
 </div>
 
 <script>
-const DEVS = ["房間電燈", "戶外電燈", "客廳電燈", "客廳風扇", "手機充電", "定時開關", "抽水馬達", "車庫照明", "蕾達感應"];
+const DEVS = ["房間電燈", "戶外電燈", "客燈電燈", "客廳風扇", "手機充電", "定時開關", "抽水馬達", "車庫照明", "雷達感應"];
 const BROKER = "wss://yb01715d.ala.asia-southeast1.emqxsl.com:8084/mqtt";
 const client = mqtt.connect(BROKER, { username: "jyhon", password: "jyhon", clientId: "web_"+Math.random().toString(16).substr(2,6) });
 
@@ -92,14 +80,19 @@ function init() {
   const rg = document.getElementById("relayGroup");
   const ig = document.getElementById("infoGroup");
   DEVS.forEach((n, i) => {
-    const swNum = i + 1; 
+    const swId = (i + 1).toString();
+    
+    // 關鍵修正：確保 swState 初始化，防止 undefined 導致點擊邏輯失效
+    swState[swId] = false; 
+
     const btn = document.createElement("button");
-    btn.id = "sw" + swNum; btn.className = "device-btn";
+    btn.id = "sw" + swId; 
+    btn.className = "device-btn";
     btn.innerText = n + "\n(關)"; 
     
     btn.onclick = function() {
-      // 核心修正：從按鈕 ID 重新取得編號，確保 1-9 號邏輯完全鎖定
-      const id = this.id.replace("sw", "");
+      const id = this.id.replace("sw", ""); 
+      // 直接拿 swState[id] 判斷，現在保證不是 undefined
       const targetState = swState[id] ? "OFF" : "ON";
       const totalSeconds = (selH * 3600) + (selM * 60);
       
@@ -115,11 +108,8 @@ function init() {
     rg.appendChild(btn);
 
     const info = document.createElement("div");
-    info.id = "info" + swNum; info.className = "info-btn";
+    info.id = "info" + swId; info.className = "info-btn";
     ig.appendChild(info);
-    
-    // 初始化 swState 預設值
-    swState[swNum] = false;
   });
   initVoice();
 }
@@ -139,13 +129,9 @@ function resetToManual() {
   document.querySelectorAll('#minGroup .delay-btn')[0].classList.add('active');
 }
 
-// 修正：現在包含秒數 (HH:mm:ss)
 function getOffTimeStr(seconds) {
   const offTime = new Date(new Date().getTime() + seconds * 1000);
-  const h = offTime.getHours().toString().padStart(2, '0');
-  const m = offTime.getMinutes().toString().padStart(2, '0');
-  const s = offTime.getSeconds().toString().padStart(2, '0');
-  return `${h}:${m}:${s}`;
+  return offTime.toTimeString().split(' ')[0];
 }
 
 function updateInfoBtn(id, timeStr, isShow) {
@@ -161,31 +147,24 @@ function updateInfoBtn(id, timeStr, isShow) {
 function initVoice() {
     const micBtn = document.getElementById('micBtn'), voiceText = document.getElementById('voiceText');
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) { voiceText.innerText = "不支援語音辨識"; return; }
+    if (!SpeechRecognition) return;
     const recognition = new SpeechRecognition(); recognition.lang = 'zh-TW';
-    micBtn.onclick = () => { recognition.start(); micBtn.classList.add('recording'); voiceText.innerText = "聆聽中..."; };
+    micBtn.onclick = () => { recognition.start(); micBtn.classList.add('recording'); };
     recognition.onresult = (event) => {
         const result = event.results[0][0].transcript;
         voiceText.innerText = "辨識結果：" + result;
         DEVS.forEach((name, index) => {
             if (result.includes(name)) {
-                const swNum = index + 1;
+                const swNum = (index + 1).toString();
                 const totalSeconds = (selH * 3600) + (selM * 60);
                 if (result.includes("開啟") || result.includes("打開") || result.includes("亮")) {
                     client.publish(`jam1liau2/sw${swNum}/set`, "ON");
-                    if (totalSeconds > 0) {
-                        const offTimeStr = getOffTimeStr(totalSeconds);
-                        client.publish("jam1liau2/timer/autoff", JSON.stringify({ id: swNum, delay: totalSeconds }));
-                        client.publish(`jam1liau2/sw${swNum}/timer_at`, offTimeStr, {retain:true});
-                        setTimeout(() => { updateInfoBtn(swNum, offTimeStr, true); resetToManual(); }, 1000);
-                    }
                 } else if (result.includes("關閉") || result.includes("關掉") || result.includes("熄")) {
                     client.publish(`jam1liau2/sw${swNum}/set`, "OFF");
                 }
             }
         });
     };
-    recognition.onerror = () => { micBtn.classList.remove('recording'); };
     recognition.onend = () => { micBtn.classList.remove('recording'); };
 }
 
@@ -202,7 +181,8 @@ client.on("message", (t, m) => {
   const swMatch = t.match(/sw(\d+)\/state/);
   const timerMatch = t.match(/sw(\d+)\/timer_at/);
   if(swMatch) {
-    const id = swMatch[1]; swState[id] = (msg === "ON");
+    const id = swMatch[1]; 
+    swState[id] = (msg === "ON");
     const b = document.getElementById("sw"+id);
     if(b) { 
         b.classList.toggle("on", swState[id]); 
