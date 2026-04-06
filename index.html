@@ -353,14 +353,18 @@ function initVoice() {
 client.on("connect", () => {
 
   document.getElementById("status").innerText = "MQTT 已連線";
+	
+//  for (let i=1; i<=9; i++) {
+//
+//    client.subscribe(`jam1liau2/sw${i}/state`);
+//
+//    client.subscribe(`jam1liau2/sw${i}/timer_at`);
+//
+//  }
 
-  for (let i=1; i<=9; i++) {
-
-    client.subscribe(`jam1liau2/sw${i}/state`);
-
-    client.subscribe(`jam1liau2/sw${i}/timer_at`);
-
-  }
+  // 一次訂閱全部，省時省力
+  
+  client.subscribe("jam1liau2/#");
 
 });
 
