@@ -142,7 +142,8 @@ function getOffTimeStr(seconds) {
 function updateInfoBtn(id, timeStr, isShow) {
   const info = document.getElementById("info" + id);
   if (info) {
-    if (isShow && timeStr && swState[id]) {
+    // 證據：移除 swState[id] 檢查，確保不論訊息抵達順序為何，只要有定時時間就顯示
+    if (isShow && timeStr && timeStr.length > 2) {
       info.innerText = `⏳ ${DEVS[id-1]}：預計於 ${timeStr} 關閉`;
       info.classList.add("show");
     } else { info.classList.remove("show"); }
@@ -202,7 +203,8 @@ client.on("message", (t, m) => {
   }
   if(timerMatch) {
     const id = timerMatch[1];
-    if(msg && swState[id]) { updateInfoBtn(id, msg, true); } 
+    // 證據：移除對 swState[id] 的強迫依賴，解決 6-9 號訊息被過濾的問題
+    if(msg && msg.length > 2) { updateInfoBtn(id, msg, true); } 
     else { updateInfoBtn(id, "", false); }
   }
 });
