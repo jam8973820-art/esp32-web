@@ -81,7 +81,7 @@
 </div>
 
 <script>
-const DEVS = ["房間電燈", "戶外電燈", "客廳電燈", "客廳風扇", "設備5", "設備6", "設備7", "設備8", "設備9"];
+const DEVS = ["房間電燈", "戶外電燈", "客廳電燈", "客廳風扇", "手機充電", "定時開關", "抽水馬達", "車庫照明", "蕾達感應"];
 const BROKER = "wss://yb01715d.ala.asia-southeast1.emqxsl.com:8084/mqtt";
 const client = mqtt.connect(BROKER, { username: "jyhon", password: "jyhon", clientId: "web_"+Math.random().toString(16).substr(2,6) });
 
@@ -92,26 +92,31 @@ function init() {
   const rg = document.getElementById("relayGroup");
   const ig = document.getElementById("infoGroup");
   DEVS.forEach((n, i) => {
+    const swId = (i + 1).toString(); // 強制轉為字串 ID
+    swState[swId] = false; // 初始化狀態，防止 undefined 導致切換失效
+
     const btn = document.createElement("button");
-    const swNum = (i + 1).toString(); // 強制轉為字串
-    btn.id = "sw" + swNum; btn.className = "device-btn";
+    btn.id = "sw" + swId; btn.className = "device-btn";
     btn.innerText = n + "\n(關)"; 
+    
     btn.onclick = () => {
-      // 修正點：使用字串 swNum 來存取 swState，確保切換邏輯正常
-      const targetState = swState[swNum] ? "OFF" : "ON";
+      // 修正：使用 swId 閉包變數確保抓到正確的狀態
+      const targetState = swState[swId] ? "OFF" : "ON";
       const totalSeconds = (selH * 3600) + (selM * 60);
-      client.publish(`jam1liau2/sw${swNum}/set`, targetState, {retain:true});
+      
+      client.publish(`jam1liau2/sw${swId}/set`, targetState, {retain:true});
+      
       if (targetState === "ON" && totalSeconds > 0) {
         const offTimeStr = getOffTimeStr(totalSeconds);
-        client.publish("jam1liau2/timer/autoff", JSON.stringify({ id: parseInt(swNum), delay: totalSeconds }));
-        client.publish(`jam1liau2/sw${swNum}/timer_at`, offTimeStr, {retain:true});
-        setTimeout(() => { updateInfoBtn(swNum, offTimeStr, true); resetToManual(); }, 1000);
+        client.publish("jam1liau2/timer/autoff", JSON.stringify({ id: parseInt(swId), delay: totalSeconds }));
+        client.publish(`jam1liau2/sw${swId}/timer_at`, offTimeStr, {retain:true});
+        setTimeout(() => { updateInfoBtn(swId, offTimeStr, true); resetToManual(); }, 1000);
       }
     };
     rg.appendChild(btn);
 
     const info = document.createElement("div");
-    info.id = "info" + swNum; info.className = "info-btn";
+    info.id = "info" + swId; info.className = "info-btn";
     ig.appendChild(info);
   });
   initVoice();
@@ -144,6 +149,7 @@ function getOffTimeStr(seconds) {
 function updateInfoBtn(id, timeStr, isShow) {
   const info = document.getElementById("info" + id);
   if (info) {
+    // 修正：移除 swState[id] 依賴，確保訊息顯示不被阻斷
     if (isShow && timeStr && timeStr.length > 2) {
       info.innerText = `⏳ ${DEVS[parseInt(id)-1]}：預計於 ${timeStr} 關閉`;
       info.classList.add("show");
