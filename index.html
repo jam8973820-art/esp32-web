@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+﻿<!DOCTYPE html> 
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
@@ -81,8 +81,6 @@ function init() {
   const ig = document.getElementById("infoGroup");
   DEVS.forEach((n, i) => {
     const swId = (i + 1).toString();
-    
-    // 關鍵修正：確保 swState 初始化，防止 undefined 導致點擊邏輯失效
     swState[swId] = false; 
 
     const btn = document.createElement("button");
@@ -92,8 +90,16 @@ function init() {
     
     btn.onclick = function() {
       const id = this.id.replace("sw", ""); 
-      // 直接拿 swState[id] 判斷，現在保證不是 undefined
-      const targetState = swState[id] ? "OFF" : "ON";
+
+      // ✅ 修正：先用本地狀態切換（關鍵）
+      const current = swState[id] || false;
+      const targetState = current ? "OFF" : "ON";
+      swState[id] = !current;
+
+      const b = document.getElementById("sw"+id);
+      b.classList.toggle("on", swState[id]);
+      b.innerText = DEVS[parseInt(id)-1] + (swState[id]?"\n(開)":"\n(關)");
+
       const totalSeconds = (selH * 3600) + (selM * 60);
       
       client.publish(`jam1liau2/sw${id}/set`, targetState, {retain:true});
