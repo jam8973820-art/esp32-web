@@ -26,7 +26,7 @@
   #micBtn { padding: 10px 25px; border-radius: 20px; background: #4285f4; color: white; border: none; font-size: 14px; font-weight: bold; cursor: pointer; }
   #micBtn.recording { background: #ea4335; animation: pulse 1.5s infinite; }
   
-  /* 新增的磁扣開關按鈕樣式 */
+  /* 磁扣開關按鈕樣式 */
   #magBtn { position: absolute; right: 8px; padding: 10px 15px; border-radius: 20px; background: #9b59b6; color: white; border: none; font-size: 13px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(155,89,182,0.3); }
   #magBtn:active { background: #8e44ad; }
   
@@ -61,7 +61,7 @@
     <button class="delay-btn" onclick="updateTime('m', 2, this)">2</button>
     <button class="delay-btn" onclick="updateTime('m', 3, this)">3</button>
     <button class="delay-btn" onclick="updateTime('m', 5, this)">5</button>
-    <button class="delay-btn" onclick="updateTime('m', 10, this)">10</button>
+    <button class="delay-btn" onclick="updateTime('m', 10, this).">10</button>
     <button class="delay-btn" onclick="updateTime('m', 20, this)">20</button>
     <button class="delay-btn" onclick="updateTime('m', 30, this)">30</button>
     <button class="delay-btn" onclick="updateTime('m', 40, this)">40</button>
@@ -185,10 +185,10 @@ function initVoice() {
     recognition.onend = () => { micBtn.classList.remove('recording'); };
 }
 
-// 修正：磁扣開關觸發邏輯（5秒後發送 ON 並同步網頁按鈕變綠，再過 1 秒發送 OFF 並恢復灰色）
+// 測試用：改為觸發「開關6」（5秒後發送 sw6 ON 並讓網頁設備6變綠，再過 1 秒發送 sw6 OFF 並恢復灰色）
 function triggerMagneticSwitch() {
   const magBtn = document.getElementById("magBtn");
-  const sw5Btn = document.getElementById("sw5"); // 取得開關5 (設備5) 的按鈕
+  const sw6Btn = document.getElementById("sw6"); // 取得開關6 (設備6) 的按鈕
   
   magBtn.disabled = true;
   magBtn.style.background = "#7f8c8d";
@@ -196,25 +196,25 @@ function triggerMagneticSwitch() {
 
   // 5秒後發送 ON
   setTimeout(() => {
-    client.publish("jam1liau2/sw5/set", "ON", {retain:true});
+    client.publish("jam1liau2/sw6/set", "ON", {retain:true});
     magBtn.innerText = "🟢 開啟 1s";
     
-    // 同步更新網頁上「設備5」的 UI 狀態為 ON (變綠色)
-    if (sw5Btn) {
-      swState["5"] = true;
-      sw5Btn.classList.add("on");
-      sw5Btn.innerText = DEVS[4] + "\n(開)";
+    // 同步更新網頁上「設備6」的 UI 狀態為 ON (變綠色)
+    if (sw6Btn) {
+      swState["6"] = true;
+      sw6Btn.classList.add("on");
+      sw6Btn.innerText = DEVS[5] + "\n(開)";
     }
 
     // 再過 1秒後發送 OFF
     setTimeout(() => {
-      client.publish("jam1liau2/sw5/set", "OFF", {retain:true});
+      client.publish("jam1liau2/sw6/set", "OFF", {retain:true});
       
-      // 同步更新網頁上「設備5」的 UI 狀態為 OFF (變灰色)
-      if (sw5Btn) {
-        swState["5"] = false;
-        sw5Btn.classList.remove("on");
-        sw5Btn.innerText = DEVS[4] + "\n(關)";
+      // 同步更新網頁上「設備6」的 UI 狀態為 OFF (變灰色)
+      if (sw6Btn) {
+        swState["6"] = false;
+        sw6Btn.classList.remove("on");
+        sw6Btn.innerText = DEVS[5] + "\n(關)";
       }
       
       // 恢復磁扣開關按鈕
