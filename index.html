@@ -71,7 +71,6 @@
   <div class="info-grid" id="infoGroup"></div>
 </div>
 
-<!-- 修正按鈕控制區，將磁扣開關放至右側 -->
 <div class="control-action-area">
   <button id="micBtn">🎤 語音控制</button>
   <button id="magBtn" onclick="triggerMagneticSwitch()">🔑 磁扣開關</button>
@@ -104,7 +103,6 @@ function init() {
     btn.onclick = function() {
       const id = this.id.replace("sw", ""); 
 
-      // ✅ 修正：先用本地狀態切換（關鍵）
       const current = swState[id] || false;
       const targetState = current ? "OFF" : "ON";
       swState[id] = !current;
@@ -187,9 +185,11 @@ function initVoice() {
     recognition.onend = () => { micBtn.classList.remove('recording'); };
 }
 
-// 新增：磁扣開關觸發邏輯（5秒後發送 ON，再過 1 秒發送 OFF）
+// 修正：磁扣開關觸發邏輯（5秒後發送 ON 並同步網頁按鈕變綠，再過 1 秒發送 OFF 並恢復灰色）
 function triggerMagneticSwitch() {
   const magBtn = document.getElementById("magBtn");
+  const sw5Btn = document.getElementById("sw5"); // 取得開關5 (設備5) 的按鈕
+  
   magBtn.disabled = true;
   magBtn.style.background = "#7f8c8d";
   magBtn.innerText = "⏳ 等待5秒...";
@@ -198,10 +198,26 @@ function triggerMagneticSwitch() {
   setTimeout(() => {
     client.publish("jam1liau2/sw5/set", "ON", {retain:true});
     magBtn.innerText = "🟢 開啟 1s";
+    
+    // 同步更新網頁上「設備5」的 UI 狀態為 ON (變綠色)
+    if (sw5Btn) {
+      swState["5"] = true;
+      sw5Btn.classList.add("on");
+      sw5Btn.innerText = DEVS[4] + "\n(開)";
+    }
 
-    // 1秒後發送 OFF
+    // 再過 1秒後發送 OFF
     setTimeout(() => {
       client.publish("jam1liau2/sw5/set", "OFF", {retain:true});
+      
+      // 同步更新網頁上「設備5」的 UI 狀態為 OFF (變灰色)
+      if (sw5Btn) {
+        swState["5"] = false;
+        sw5Btn.classList.remove("on");
+        sw5Btn.innerText = DEVS[4] + "\n(關)";
+      }
+      
+      // 恢復磁扣開關按鈕
       magBtn.disabled = false;
       magBtn.style.background = "#9b59b6";
       magBtn.innerText = "🔑 磁扣開關";
@@ -212,16 +228,6 @@ function triggerMagneticSwitch() {
 
 client.on("connect", () => {
   document.getElementById("status").innerText = "MQTT 已連線";
-  
-//  for (let i=1; i<=9; i++) {
-//
-//    client.subscribe(`jam1liau2/sw${i}/state`);
-//
-//    client.subscribe(`jam1liau2/sw${i}/timer_at`);
-//
-//  }
-
-  // 一次訂閱全部，訂閱太多個，後面的會訂閱失敗
   client.subscribe("jam1liau2/#");
 });
 
