@@ -41,7 +41,7 @@
 <div class="grid" id="relayGroup"></div>
 
 <div class="timer-box">
-  <div class="timer-header"><span>?? 設定關閉時間</span><span id="totalDisplay">手動</span></div>
+  <div class="timer-header"><span>⏲️ 設定關閉時間</span><span id="totalDisplay">手動</span></div>
   <div class="delay-options" id="hourGroup">
     <button class="delay-btn active" onclick="updateTime('h', 0, this)">0</button>
     <button class="delay-btn" onclick="updateTime('h', 1, this)">1</button>
@@ -73,8 +73,8 @@
 
 <!-- 修正按鈕控制區，將磁扣開關放至右側 -->
 <div class="control-action-area">
-  <button id="micBtn">?? 語音控制</button>
-  <button id="magBtn" onclick="triggerMagneticSwitch()">?? 磁扣開關</button>
+  <button id="micBtn">🎤 語音控制</button>
+  <button id="magBtn" onclick="triggerMagneticSwitch()">🔑 磁扣開關</button>
 </div>
 
 <div id="voiceArea">
@@ -104,7 +104,7 @@ function init() {
     btn.onclick = function() {
       const id = this.id.replace("sw", ""); 
 
-      // ? 修正：先用本地狀態切換（關鍵）
+      // ✅ 修正：先用本地狀態切換（關鍵）
       const current = swState[id] || false;
       const targetState = current ? "OFF" : "ON";
       swState[id] = !current;
@@ -157,7 +157,7 @@ function updateInfoBtn(id, timeStr, isShow) {
   const info = document.getElementById("info" + id);
   if (info) {
     if (isShow && timeStr && timeStr.length > 2) {
-      info.innerText = `? ${DEVS[parseInt(id)-1]}：預計於 ${timeStr} 關閉`;
+      info.innerText = `⏳ ${DEVS[parseInt(id)-1]}：預計於 ${timeStr} 關閉`;
       info.classList.add("show");
     } else { info.classList.remove("show"); }
   }
@@ -192,19 +192,19 @@ function triggerMagneticSwitch() {
   const magBtn = document.getElementById("magBtn");
   magBtn.disabled = true;
   magBtn.style.background = "#7f8c8d";
-  magBtn.innerText = "? 等待5秒...";
+  magBtn.innerText = "⏳ 等待5秒...";
 
   // 5秒後發送 ON
   setTimeout(() => {
     client.publish("jam1liau2/sw5/set", "ON", {retain:true});
-    magBtn.innerText = "?? 開啟 1s";
+    magBtn.innerText = "🟢 開啟 1s";
 
     // 1秒後發送 OFF
     setTimeout(() => {
       client.publish("jam1liau2/sw5/set", "OFF", {retain:true});
       magBtn.disabled = false;
       magBtn.style.background = "#9b59b6";
-      magBtn.innerText = "?? 磁扣開關";
+      magBtn.innerText = "🔑 磁扣開關";
     }, 1000);
 
   }, 5000);
